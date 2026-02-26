@@ -137,6 +137,11 @@ Run these from the **project root** (`ecom-go-api-project`).
 | Command | What it does |
 |--------|----------------|
 | `go run cmd/*.go` | Build and run the API. It reads `.env` and connects to Postgres (port 15432). Stop with Ctrl+C. |
+| `go test -v ./...` | Run all tests. Integration tests skip if DB is unavailable. |
+| `go test -v ./cmd/ -run Integration` | Run only integration tests (auth, products, orders). Use `go test`, not `go run`, for `*_test.go` files. |
+| `go build ./...` | Verify all packages compile (no binary produced). |
+| `go build -o api ./cmd/` | Build the API binary as `./api` (for deployment). |
+| `sqlc generate` | Regenerate Go code from SQL. Run after changing `queries.sql` or schema. |
 | `cp .env.example .env` | Create `.env` from the template (do once). |
 | `source .env` then `goose up` | Run DB migrations (or use `./scripts/setup-and-run.sh` which does this for you). |
 

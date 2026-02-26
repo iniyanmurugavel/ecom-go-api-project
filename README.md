@@ -21,6 +21,8 @@ If you run into connection errors or “role postgres does not exist”, see **[
 
 For **authentication (JWT)** — how to register, login, and use the token in Postman — see **[AUTH_README.md](AUTH_README.md)**.
 
+For a **standalone Postman guide** — step-by-step for every endpoint, Postman CLI install, and quick reference — see **[POSTMAN_GUIDE.md](POSTMAN_GUIDE.md)**.
+
 For a **high-level design** of how the API works (request flow: API → handler → service → SQLC → PostgreSQL, Docker, and what to do when you make changes or want hot reload), see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 For **development vs deployment** (use Docker or your own DB in dev? deploy in Docker later?), **Docker basics**, and a **command reference**, see **[DEVELOPMENT_AND_DEPLOYMENT.md](DEVELOPMENT_AND_DEPLOYMENT.md)**.
@@ -136,6 +138,27 @@ In simple words:
    - The handler calls a **service** (business logic).
    - The service uses the **repository (`sqlc`)** to talk to PostgreSQL.
    - The handler writes the response as JSON.
+
+---
+
+### Command reference (what each command does)
+
+| Command | Purpose |
+|---------|---------|
+| `go run cmd/*.go` | Build and run the API. Reads `.env`, listens on `:8080`. Stop with Ctrl+C. |
+| `go test -v ./...` | Run all tests (unit + integration). Skips integration tests if DB is unavailable. |
+| `go test -v ./cmd/ -run Integration` | Run only integration tests (register, login, products, orders). |
+| `go build ./...` | Build all packages (no output binary; use to verify code compiles). |
+| `go build -o api ./cmd/` | Build the API binary as `./api` (for deployment). |
+| `sqlc generate` | Regenerate Go code from SQL queries. Run after changing `queries.sql` or schema. |
+| `source .env; goose up` | Apply all pending migrations (requires `GOOSE_DBSTRING`, `GOOSE_MIGRATION_DIR` in `.env`). |
+| `source .env; goose down` | Roll back the last migration. |
+| `docker compose up -d` | Start PostgreSQL in the background. Run this before the API. |
+| `docker compose down` | Stop PostgreSQL. Data in the volume is kept. |
+| `docker compose down -v` | Stop PostgreSQL and delete all data (fresh DB next time). |
+| `./scripts/setup-and-run.sh` | One-shot: start DB, run migrations, seed products, start API. |
+
+**Note:** Use `go test` (not `go run`) for `*_test.go` files. `go run` cannot execute test files.
 
 ---
 
