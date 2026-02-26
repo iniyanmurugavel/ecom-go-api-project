@@ -1,3 +1,4 @@
+-- Migration 1: products table. price_in_centers = price in cents; quantity = stock.
 -- +goose Up
 -- +goose StatementBegin
 CREATE TABLE IF NOT EXISTS products (

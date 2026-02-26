@@ -1,3 +1,4 @@
+// API wiring: chi router, middleware, and route -> handler -> service -> repo.
 package main
 
 import (
@@ -13,31 +14,27 @@ import (
 	"github.com/sikozonpc/ecom/internal/products"
 )
 
+// mount builds the HTTP handler: middleware stack then route -> handler. Handler gets service, service gets repo (DB).
 func (app *application) mount() http.Handler {
 	r := chi.NewRouter()
 
-	// A good base middleware stack
-	r.Use(middleware.RequestID) // important for rate limiting
-	r.Use(middleware.RealIP)    // import for rate limiting and analytics and tracing
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer) // recover from crashes
-
-	// Set a timeout value on the request context (ctx), that will signal
-	// through ctx.Done() that the request has timed out and further
-	// processing should be stopped.
+	r.Use(middleware.Recoverer) // catch panics, return 500
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("all good"))
 	})
 
+	// Dependency chain: handler -> service -> repo. Repo = sqlc-generated code that runs SQL.
 	productService := products.NewService(repo.New(app.db))
-	productHandler := products.NewHandler(productService)
-	r.Get("/products", productHandler.ListProducts)
+	r.Get("/products", products.NewHandler(productService).ListProducts)
 
+	// Orders need db connection for transactions; repo.New(app.db) for queries, app.db for Begin/Commit.
 	orderService := orders.NewService(repo.New(app.db), app.db)
-	ordersHandler := orders.NewHandler(orderService)
-	r.Post("/orders", ordersHandler.PlaceOrder)
+	r.Post("/orders", orders.NewHandler(orderService).PlaceOrder)
 
 	return r
 }
@@ -50,16 +47,14 @@ func (app *application) run(h http.Handler) error {
 		ReadTimeout:  time.Second * 10,
 		IdleTimeout:  time.Minute,
 	}
-
 	log.Printf("server has started at addr %s", app.config.addr)
-
 	return srv.ListenAndServe()
 }
 
+// application holds config and the single DB connection passed into repos.
 type application struct {
 	config config
-	// logger
-	db *pgx.Conn
+	db     *pgx.Conn
 }
 
 type config struct {

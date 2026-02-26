@@ -1,3 +1,4 @@
+// Types and service interface for orders. Request DTOs match JSON body (productId, customerId).
 package orders
 
 import (
@@ -16,6 +17,7 @@ type createOrderParams struct {
 	Items      []orderItem `json:"items"`
 }
 
+// Service: handlers call PlaceOrder; service runs in a DB transaction and returns repo.Order.
 type Service interface {
 	PlaceOrder(ctx context.Context, tempOrder createOrderParams) (repo.Order, error)
 }

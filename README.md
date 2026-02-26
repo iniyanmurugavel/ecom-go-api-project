@@ -14,6 +14,12 @@ The API currently supports:
 - **`GET /products`** – list all products
 - **`POST /orders`** – create an order for existing products
 
+If you run into connection errors or “role postgres does not exist”, see **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** for a summary of common issues and how to fix them.
+
+For a **high-level design** of how the API works (request flow: API → handler → service → SQLC → PostgreSQL, Docker, and what to do when you make changes or want hot reload), see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+
+For **development vs deployment** (use Docker or your own DB in dev? deploy in Docker later?), **Docker basics**, and a **command reference**, see **[DEVELOPMENT_AND_DEPLOYMENT.md](DEVELOPMENT_AND_DEPLOYMENT.md)**.
+
 ---
 
 ### Who this project is for
@@ -173,16 +179,34 @@ After this, you should be able to run `goose`, `sqlc`, `docker`, and `go` from t
 
 ---
 
+### Using .env for all credentials
+
+All credentials and config (database URL, HTTP port) are read from a single **`.env`** file so you don’t hardcode secrets or repeat them in scripts.
+
+1. **Create your `.env`** (once per machine):
+   ```bash
+   cp .env.example .env
+   ```
+   Edit `.env` if you need different values (e.g. DB password, port).
+
+2. **What uses `.env`**
+   - The **Go app** loads `.env` at startup (`godotenv`) and uses `GOOSE_DBSTRING` (or `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`) and `HTTP_ADDR`.
+   - The **setup script** (`./scripts/setup-and-run.sh`) sources `.env` before running migrations and the app, so Goose and the API use the same credentials.
+
+3. **Do not commit `.env`** (it’s in `.gitignore`). Commit `.env.example` as a template; everyone copies it to `.env` and fills in their own values.
+
+---
+
 ### Run the project (step‑by‑step)
 
 | Step | What to do | Understand & do for future learning |
 |------|------------|--------------------------------------|
 | **1. Clone** | `git clone <repo-url>` then `cd ecom-go-api-project` | You need the code on your machine. `cd` into the project root for all following commands. |
-| **2. Start DB** | `docker compose up -d` | Starts PostgreSQL in a container. The app connects to `localhost:5432` with user `postgres`, password `postgres`, db `ecom`. |
-| **3. Set DSN (optional)** | `export GOOSE_DBSTRING="host=localhost user=postgres password=postgres dbname=ecom sslmode=disable"` | Same string is used by the app and by Goose. Use this if your DB settings differ from defaults. |
-| **4. Migrate** | `goose -dir internal/adapters/postgresql/migrations postgres "$GOOSE_DBSTRING" up` | Creates tables (`products`, `orders`, `order_items`) from the SQL files in `migrations/`. Run once per fresh DB. |
+| **2. Create .env** | `cp .env.example .env` (edit if needed) | All credentials live in `.env`; the app and scripts read from it. |
+| **3. Start DB** | `docker compose up -d` | Starts PostgreSQL in a container. The app connects using the DSN from `.env` (default port 15432). |
+| **4. Migrate** | Either run `./scripts/setup-and-run.sh` (sources `.env` and runs migrations + app) or `source .env; goose up` | Creates tables from `migrations/`. Script uses `.env` so no need to export vars by hand. |
 | **5. Generate SQLC (if needed)** | `sqlc generate` | Only needed after you change `.sql` queries or schema. Generates Go code in `internal/adapters/postgresql/sqlc/`. |
-| **6. Start API** | `go run cmd/*.go` | Runs the app; server listens on `http://localhost:8080`. Stop with Ctrl+C. |
+| **6. Start API** | `go run cmd/*.go` | Runs the app (reads `.env`); server listens on `http://localhost:8080`. Stop with Ctrl+C. |
 
 **Commands to run (in order):**
 
@@ -191,20 +215,19 @@ After this, you should be able to run `goose`, `sqlc`, `docker`, and `go` from t
 git clone <this-repo-url>
 cd ecom-go-api-project
 
-# 2. Start PostgreSQL
+# 2. Create .env from template (all credentials go here)
+cp .env.example .env
+# Edit .env if you need different DB host/port/user/password
+
+# 3. Start PostgreSQL
 docker compose up -d
 
-# 3. Set DB connection string (optional; use if you didn’t change docker-compose)
-export GOOSE_DBSTRING="host=localhost user=postgres password=postgres dbname=ecom sslmode=disable"
-
-# 4. Create tables (migrations)
-goose -dir internal/adapters/postgresql/migrations postgres "$GOOSE_DBSTRING" up
+# 4. Run migrations and start API (script sources .env automatically)
+./scripts/setup-and-run.sh
+# Or manually: source .env; goose up; go run cmd/*.go
 
 # 5. Regenerate SQLC only if you changed queries/schema
 sqlc generate
-
-# 6. Start the API server
-go run cmd/*.go
 ```
 
 You should see:

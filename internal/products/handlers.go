@@ -1,3 +1,4 @@
+// Handlers: HTTP layer — call service, map errors to status codes, write JSON.
 package products
 
 import (
@@ -12,11 +13,10 @@ type handler struct {
 }
 
 func NewHandler(service Service) *handler {
-	return &handler{
-		service: service,
-	}
+	return &handler{service: service}
 }
 
+// ListProducts: GET /products — no body; service returns slice from DB; we return 200 or 500.
 func (h *handler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	products, err := h.service.ListProducts(r.Context())
 	if err != nil {
@@ -24,6 +24,5 @@ func (h *handler) ListProducts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	json.Write(w, http.StatusOK, products)
 }

@@ -1,0 +1,12 @@
+# Local env with real credentials (use .env.example as template)
+#.env
+
+# Binaries
+*.exe
+#ecom-api
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

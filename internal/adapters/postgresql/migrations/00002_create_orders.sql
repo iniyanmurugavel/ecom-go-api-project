@@ -1,3 +1,4 @@
+-- Migration 2: orders (header) + order_items (line items). order_items.order_id -> orders.id.
 -- +goose Up
 -- +goose StatementBegin
 CREATE TABLE IF NOT EXISTS orders (

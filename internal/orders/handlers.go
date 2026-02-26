@@ -1,3 +1,4 @@
+// Handlers: parse JSON body, call service, map service errors to HTTP status (400, 404, 500), write JSON.
 package orders
 
 import (
@@ -12,11 +13,10 @@ type handler struct {
 }
 
 func NewHandler(service Service) *handler {
-	return &handler{
-		service: service,
-	}
+	return &handler{service: service}
 }
 
+// PlaceOrder: POST /orders — body = { customerId, items: [{ productId, quantity }] }. Returns 201 + order or 400/404/500.
 func (h *handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	var tempOrder createOrderParams
 	if err := json.Read(r, &tempOrder); err != nil {
@@ -28,15 +28,12 @@ func (h *handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	createdOrder, err := h.service.PlaceOrder(r.Context(), tempOrder)
 	if err != nil {
 		log.Println(err)
-
 		if err == ErrProductNotFound {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
-
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	json.Write(w, http.StatusCreated, createdOrder)
 }
