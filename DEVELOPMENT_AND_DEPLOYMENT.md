@@ -54,6 +54,22 @@ The app doesn’t care whether the DB is in Docker or on your host; it only care
 
 **Summary:** Set the DB you want in `.env` (port **15432** = Docker, **5432** = typical Mac Postgres). Then run `goose up`. That DB is your local DB; schema and data reflect there.
 
+### TablePlus (or any DB client) and Docker: same DB
+
+**Yes – both your API and TablePlus can use the same database.** There is only one Postgres; Docker runs it. Your API and TablePlus are just two different **clients** connecting to that same server.
+
+- **Docker** = runs the database (PostgreSQL).
+- **Your API** = connects to it using `.env` (host localhost, port 15432, database ecom).
+- **TablePlus** = connect to the **same** database with the same settings.
+
+**In TablePlus (or any DB client):** Use the same connection as the app (see README: “Standard Docker Postgres connection”):
+
+| Host     | Port   | Database | User     | Password | SSL  |
+|----------|--------|----------|----------|----------|------|
+| localhost | 15432 | ecom     | postgres | postgres | off  |
+
+Save and connect. You will see the same `products`, `orders`, and `order_items` that the API uses. Any change in TablePlus or via the API is in this one database; both stay in sync.
+
 ---
 
 ## 2. Later: deploying “in Docker”
@@ -149,7 +165,7 @@ Run these from the **project root** (`ecom-go-api-project`).
 5. **Test:**  
    Open Postman, hit `http://localhost:8080/health`, `http://localhost:8080/products`, `http://localhost:8080/orders`.
 
-To stop: Ctrl+C for the API; `docker compose down` if you want to stop Postgres.
+**How to stop:** Ctrl+C stops the API. To stop the DB: `docker compose down` (keeps data) or `docker compose down -v` (removes data). See README section "How to stop the API and the database" for the full table.
 
 ---
 

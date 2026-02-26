@@ -197,6 +197,14 @@ All credentials and config (database URL, HTTP port) are read from a single **`.
 
 3. **Do not commit `.env`** (it’s in `.gitignore`). Commit `.env.example` as a template; everyone copies it to `.env` and fills in their own values.
 
+**One database for the project** — The app uses a single database: Postgres running in Docker. There is only one DB; the API, migrations (Goose), and any DB client (e.g. TablePlus) all connect to it. If you have another Postgres on your machine (e.g. on port 5432), that is separate; this project uses only the Docker one on port 15432.
+
+**Standard Docker Postgres connection** (app, Goose, and any DB client use these):
+
+| Host     | Port   | Database | User     | Password | SSL  |
+|----------|--------|----------|----------|----------|------|
+| localhost | 15432 | ecom     | postgres | postgres | off  |
+
 ---
 
 ### Run the project (step‑by‑step)
@@ -239,6 +247,19 @@ server has started at addr :8080
 ```
 
 The API is now available at **`http://localhost:8080`**. Keep this terminal open while you test.
+
+---
+
+### How to stop the API and the database
+
+| What to stop | Command | Comment |
+|--------------|---------|---------|
+| **API** | Press **Ctrl+C** in the terminal where `go run cmd/*.go` is running | Stops the Go server only. The database keeps running. |
+| **Database (Docker)** | `docker compose down` | Stops and removes the Postgres container. Your data stays in the Docker volume (safe for next `docker compose up -d`). |
+| **Database and delete all data** | `docker compose down -v` | Stops the container and **removes the volume** — next time you start, you get an empty DB (run migrations again). |
+| **Check if DB is running** | `docker ps` | You should see `ecom-postgres` when the DB is up. |
+
+So: use **Ctrl+C** to stop the API; use **`docker compose down`** when you want to stop the DB (e.g. at end of day). Start again with `docker compose up -d` then `go run cmd/*.go`.
 
 ---
 

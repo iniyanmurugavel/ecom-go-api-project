@@ -203,7 +203,7 @@ So: **use 8080 normally; 8081 is only a fallback when 8080 is already in use.**
 - **Docker Postgres:** Lives inside the `ecom-postgres` container. Data is stored in a Docker volume (`postgres-data`). You connect to it from your Mac at **localhost:15432** (because `docker-compose.yaml` maps container port 5432 to host port 15432).
 - **Your Mac Postgres:** If you have Postgres.app or `brew install postgresql`, that runs **separately** on your machine, often on port **5432**. It’s a different server, different data. The API and this project are set up to use the **Docker** one (15432), not the Mac one (5432).
 
-So: two separate PostgreSQLs. The project uses only the one in Docker (15432).
+So: this project has **one database** — the one in Docker (port 15432). Your Mac may have another Postgres on 5432; we do not use that.
 
 ---
 
@@ -221,13 +221,13 @@ If your DB client (TablePlus, DBeaver, pgAdmin, etc.) or an app “connection te
    docker compose up -d
    ```
 
-2. **Exact connection settings (must match):**
-   - **Host:** `localhost` (or `127.0.0.1`)
-   - **Port:** `15432` (number, not 5432)
-   - **Database:** `ecom`
-   - **User:** `postgres`
-   - **Password:** `postgres`
-   - **SSL/TLS:** Turn **off** or use “prefer” / “disable” (the project uses `sslmode=disable` in the DSN). Some clients fail the test if they insist on SSL and the server doesn’t require it.
+2. **Exact connection settings (must match)** — same as README "Standard Docker Postgres connection":
+
+   | Host     | Port   | Database | User     | Password | SSL  |
+   |----------|--------|----------|----------|----------|------|
+   | localhost | 15432 | ecom     | postgres | postgres | off  |
+
+   Use **port 15432**, not 5432. Turn **SSL/TLS** off; the project uses `sslmode=disable`. Some clients fail if they insist on SSL.
 
 3. **Test from the terminal (bypasses the client):**
    ```bash

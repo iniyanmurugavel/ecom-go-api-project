@@ -265,14 +265,13 @@ So the data **is** in the database – but in the one listening on **15432** (Do
 
 **What to do:**
 
-1. **Connect your DB client to the same database the API uses:**
-   - **Host:** localhost
-   - **Port:** 15432 (not 5432)
-   - **Database:** ecom
-   - **User:** postgres
-   - **Password:** postgres
+1. **Connect your DB client to the same database the API uses** (same as README: “Standard Docker Postgres connection”):
 
-   After that, you should see the same products and orders (and order_items) that the API reads and writes.
+   | Host     | Port   | Database | User     | Password | SSL  |
+   |----------|--------|----------|----------|----------|------|
+   | localhost | 15432 | ecom     | postgres | postgres | off  |
+
+   Use **port 15432**, not 5432. After that, you should see the same products and orders (and order_items) that the API reads and writes.
 
 2. **Or view data from the terminal (no GUI):**
    ```bash
