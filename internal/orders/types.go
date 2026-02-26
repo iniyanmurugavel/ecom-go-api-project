@@ -1,4 +1,4 @@
-// Types and service interface for orders. Request DTOs match JSON body (productId, customerId).
+// Types and service interface for orders. Request body has items only; customerId comes from JWT.
 package orders
 
 import (
@@ -12,8 +12,9 @@ type orderItem struct {
 	Quantity  int32 `json:"quantity"`
 }
 
+// createOrderParams: customerID is from auth context (JWT), not from body.
 type createOrderParams struct {
-	CustomerID int64       `json:"customerId"`
+	CustomerID int64
 	Items      []orderItem `json:"items"`
 }
 

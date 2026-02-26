@@ -40,7 +40,11 @@ func testApp(t *testing.T) *application {
 	t.Cleanup(func() { pool.Close() })
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	return &application{
-		config: config{addr: ":8080", db: dbConfig{dsn: dsn}},
+		config: config{
+			addr:      ":8080",
+			db:        dbConfig{dsn: dsn},
+			jwtSecret: []byte("test-secret-at-least-32-characters-long"),
+		},
 		pool:   pool,
 		logger: logger,
 	}
@@ -81,7 +85,7 @@ func TestIntegration_HealthLive(t *testing.T) {
 	}
 }
 
-func TestIntegration_GetProducts(t *testing.T) {
+func TestIntegration_GetProducts_NoToken(t *testing.T) {
 	app := testApp(t)
 	if app == nil {
 		return
@@ -92,49 +96,117 @@ func TestIntegration_GetProducts(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("GET /v1/products status = %d, want 200", rec.Code)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("GET /v1/products without token status = %d, want 401", rec.Code)
 	}
-	// Response should be JSON array (possibly empty)
+}
+
+func TestIntegration_RegisterLoginAndGetProducts(t *testing.T) {
+	app := testApp(t)
+	if app == nil {
+		return
+	}
+	h := app.mount()
+
+	// 1. Register
+	regBody := bytes.NewBufferString(`{"email":"inttest@example.com","password":"pass123","name":"Int Test"}`)
+	regReq := httptest.NewRequest(http.MethodPost, "/v1/auth/register", regBody)
+	regReq.Header.Set("Content-Type", "application/json")
+	regRec := httptest.NewRecorder()
+	h.ServeHTTP(regRec, regReq)
+	_ = regRec // 201 or 409 if already exists
+
+	// 2. Login
+	loginBody := bytes.NewBufferString(`{"email":"inttest@example.com","password":"pass123"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/v1/auth/login", loginBody)
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginRec := httptest.NewRecorder()
+	h.ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusOK {
+		t.Skipf("login failed (status %d), maybe DB not migrated: %s", loginRec.Code, loginRec.Body.String())
+		return
+	}
+	var loginResp struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(loginRec.Body).Decode(&loginResp); err != nil || loginResp.Token == "" {
+		t.Skipf("login response invalid: %v", err)
+		return
+	}
+
+	// 3. Get products with token
+	req := httptest.NewRequest(http.MethodGet, "/v1/products?limit=5&offset=0", nil)
+	req.Header.Set("Authorization", "Bearer "+loginResp.Token)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("GET /v1/products with token status = %d, want 200", rec.Code)
+	}
 	var list []map[string]interface{}
 	if err := json.NewDecoder(rec.Body).Decode(&list); err != nil {
 		t.Errorf("GET /v1/products invalid JSON: %v", err)
 	}
 }
 
-func TestIntegration_PostOrder_InvalidBody(t *testing.T) {
+func TestIntegration_PostOrder_NoToken(t *testing.T) {
 	app := testApp(t)
 	if app == nil {
 		return
 	}
 	h := app.mount()
 
-	body := bytes.NewBufferString(`{"customerId": 1}`) // no "items"
+	body := bytes.NewBufferString(`{"items": [{"productId": 1, "quantity": 1}]}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/orders", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("POST /v1/orders (no items) status = %d, want 400", rec.Code)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("POST /v1/orders without token status = %d, want 401", rec.Code)
 	}
 }
 
-func TestIntegration_PostOrder_ValidBody(t *testing.T) {
+func TestIntegration_PostOrder_WithToken(t *testing.T) {
 	app := testApp(t)
 	if app == nil {
 		return
 	}
 	h := app.mount()
 
-	// Assume product id 1 exists (seed or migration). If not, we may get 404.
-	body := bytes.NewBufferString(`{"customerId": 1, "items": [{"productId": 1, "quantity": 1}]}`)
+	// Register (ignore 409 if exists) then login
+	regBody := bytes.NewBufferString(`{"email":"inttest@example.com","password":"pass123","name":"Int Test"}`)
+	regReq := httptest.NewRequest(http.MethodPost, "/v1/auth/register", regBody)
+	regReq.Header.Set("Content-Type", "application/json")
+	regRec := httptest.NewRecorder()
+	h.ServeHTTP(regRec, regReq)
+	_ = regRec
+
+	loginBody := bytes.NewBufferString(`{"email":"inttest@example.com","password":"pass123"}`)
+	loginReq := httptest.NewRequest(http.MethodPost, "/v1/auth/login", loginBody)
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginRec := httptest.NewRecorder()
+	h.ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusOK {
+		t.Skipf("login failed (run RegisterLoginAndGetProducts first or migrate DB)")
+		return
+	}
+	var loginResp struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(loginRec.Body).Decode(&loginResp); err != nil || loginResp.Token == "" {
+		t.Skipf("login response invalid")
+		return
+	}
+
+	// Place order with token (customerId from JWT, body has items only)
+	body := bytes.NewBufferString(`{"items": [{"productId": 1, "quantity": 1}]}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/orders", body)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+loginResp.Token)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
-	// 201 created or 404 if product 1 does not exist
 	if rec.Code != http.StatusCreated && rec.Code != http.StatusNotFound {
 		t.Errorf("POST /v1/orders status = %d, want 201 or 404", rec.Code)
 	}

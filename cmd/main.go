@@ -23,16 +23,21 @@ func main() {
 	_ = godotenv.Load(".env")
 	_ = godotenv.Load("../.env")
 
+	// Logger used by handlers and services (and main). Structured logs go to stdout.
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	ctx := context.Background()
+	jwtSecret := env.GetString("JWT_SECRET", "change-me-in-production-use-long-secret")
+	if len(jwtSecret) < 32 {
+		logger.Warn("JWT_SECRET should be at least 32 chars for security; using default for dev")
+	}
 	cfg := config{
 		addr:      env.GetString("HTTP_ADDR", ":8080"),
 		db:        dbConfig{dsn: getDSN()},
 		rateLimit: env.GetInt("RATE_LIMIT_REQUESTS_PER_MINUTE", 100), // 0 = disabled
+		jwtSecret: []byte(jwtSecret),
 	}
-
-	// Logger used by handlers and services (and main). Structured logs go to stdout.
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	slog.SetDefault(logger)
 
 	// Connection pool: many goroutines can use DB at once. Better than a single connection for scalability.
 	pool, err := pgxpool.New(ctx, cfg.db.dsn)

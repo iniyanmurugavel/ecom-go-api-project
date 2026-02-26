@@ -1,10 +1,11 @@
-// Handlers: HTTP layer. Parse JSON body, call service, map domain errors to status codes (400, 404, 409, 500), write JSON.
+// Handlers: HTTP layer. Parse JSON body, get customerId from JWT context, call service.
 package orders
 
 import (
 	"errors"
 	"net/http"
 
+	"github.com/sikozonpc/ecom/internal/auth"
 	"github.com/sikozonpc/ecom/internal/json"
 )
 
@@ -24,16 +25,25 @@ type handler struct {
 	}
 }
 
-// PlaceOrder handles POST /v1/orders. Body: { "customerId": 1, "items": [ { "productId": 1, "quantity": 2 } ] }.
-// Returns 201 + order JSON, or 400 (bad request), 404 (product not found), 409 (not enough stock), 500 (server error).
+// PlaceOrder handles POST /v1/orders. Requires Authorization: Bearer <token>.
+// Body: { "items": [ { "productId": 1, "quantity": 2 } ] }. Customer ID comes from JWT.
 func (h *handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
-	var tempOrder createOrderParams
-	if err := json.Read(r, &tempOrder); err != nil {
+	customerID := auth.CustomerIDFromContext(r.Context())
+	if customerID == 0 {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var body struct {
+		Items []orderItem `json:"items"`
+	}
+	if err := json.Read(r, &body); err != nil {
 		h.logger.Error("place order: bad body", "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	tempOrder := createOrderParams{CustomerID: customerID, Items: body.Items}
 	createdOrder, err := h.service.PlaceOrder(r.Context(), tempOrder)
 	if err != nil {
 		// Map domain errors to HTTP status so clients get stable status codes

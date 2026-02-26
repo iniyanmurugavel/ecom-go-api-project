@@ -37,7 +37,7 @@ docker compose exec -T postgres psql -U postgres -d ecom -c "
 " 2>/dev/null || true
 
 echo "==> Starting API server at http://localhost:8080"
-echo "    Test in Postman: GET /health, GET /v1/products, POST /v1/orders"
+echo "    Test in Postman: Register (POST /v1/auth/register), Login (POST /v1/auth/login), then GET /v1/products, POST /v1/orders with Bearer token. See AUTH_README.md"
 echo "    Stop API: Ctrl+C. Stop DB: docker compose down (README: 'How to stop the API and the database')."
 echo "    (If 8080 in use: HTTP_ADDR=:8081 go run cmd/*.go, then use :8081 in Postman)"
 echo ""

@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/httprate"
 	"github.com/jackc/pgx/v5/pgxpool"
 	repo "github.com/sikozonpc/ecom/internal/adapters/postgresql/sqlc"
+	"github.com/sikozonpc/ecom/internal/auth"
 	"github.com/sikozonpc/ecom/internal/orders"
 	"github.com/sikozonpc/ecom/internal/products"
 )
@@ -38,18 +39,28 @@ func (app *application) mount() http.Handler {
 	})
 	r.Get("/health/live", app.healthLive)
 
-	// API v1: versioned routes so we can add /v2 later without breaking clients.
+	// API v1: versioned routes. Auth routes are public; products and orders require JWT.
 	r.Route("/v1", func(r chi.Router) {
-		// Products: list with pagination (?limit=20&offset=0). Repo implements products.Repository.
-		productRepo := repo.New(app.pool) // *Queries implements products.Repository (ListProductsPaginated)
-		productSvc := products.NewService(productRepo, app.logger)
-		productHandler := products.NewHandler(productSvc, app.logger)
-		r.Get("/products", productHandler.ListProducts)
+		// Auth: register and login (no token required).
+		authSvc := auth.NewService(repo.New(app.pool), app.config.jwtSecret, app.logger)
+		authHandler := auth.NewHandler(authSvc, app.logger)
+		r.Post("/auth/register", authHandler.Register)
+		r.Post("/auth/login", authHandler.Login)
 
-		// Orders: place order. NewOrderRepo wraps *repo.Queries so it implements orders.OrderRepo.
-		orderSvc := orders.NewService(orders.NewOrderRepo(repo.New(app.pool)), app.pool, app.logger)
-		orderHandler := orders.NewHandler(orderSvc, app.logger)
-		r.Post("/orders", orderHandler.PlaceOrder)
+		// Protected routes: require Authorization: Bearer <token>. Customer ID comes from JWT.
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireAuth(app.config.jwtSecret))
+			// Products: list with pagination (?limit=20&offset=0).
+			productRepo := repo.New(app.pool)
+			productSvc := products.NewService(productRepo, app.logger)
+			productHandler := products.NewHandler(productSvc, app.logger)
+			r.Get("/products", productHandler.ListProducts)
+
+			// Orders: place order. Customer ID from JWT context.
+			orderSvc := orders.NewService(orders.NewOrderRepo(repo.New(app.pool)), app.pool, app.logger)
+			orderHandler := orders.NewHandler(orderSvc, app.logger)
+			r.Post("/orders", orderHandler.PlaceOrder)
+		})
 	})
 
 	return r
@@ -75,7 +86,8 @@ type application struct {
 type config struct {
 	addr      string
 	db        dbConfig
-	rateLimit int // requests per minute per IP; 0 = disabled
+	rateLimit int    // requests per minute per IP; 0 = disabled
+	jwtSecret []byte // for signing/verifying JWTs
 }
 
 type dbConfig struct {

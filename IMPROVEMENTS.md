@@ -1,6 +1,6 @@
-# Improvements Made: Scalable REST API Practices
+# Improvements Made: Scalable REST API Practices + JWT Auth
 
-This document summarizes all changes made to align the project with scalable REST API practices. Use it to understand what was improved and why, so you can apply similar patterns in future projects.
+This document summarizes all changes made to align the project with scalable REST API practices, plus JWT authentication. Use it to understand what was improved and why, so you can apply similar patterns in future projects.
 
 ---
 
@@ -19,6 +19,7 @@ This document summarizes all changes made to align the project with scalable RES
 | **Rate limiting** | None | Per-IP limit (100/min default; configurable via `RATE_LIMIT_REQUESTS_PER_MINUTE`) |
 | **Unit tests** | None | Products and orders services tested with mock repos |
 | **Integration tests** | None | HTTP endpoints tested against real DB (skips if DB unavailable) |
+| **JWT auth** | None | Register, login, Bearer token; customer ID from JWT for orders |
 | **CI** | None | GitHub Actions: migrations, build, unit + integration tests |
 | **Documentation** | Basic | One DB clarified; stop commands; consistent connection table; comments in code |
 
@@ -35,6 +36,9 @@ This document summarizes all changes made to align the project with scalable RES
 - `cmd/integration_test.go` – Integration tests (HTTP + real DB)
 - `.github/workflows/ci.yml` – CI: Postgres service, goose up, build, tests
 - `IMPROVEMENTS.md` – This file
+- `AUTH_README.md` – JWT auth flow, Postman testing, how it works
+- `internal/auth/` – JWT, middleware, register/login handlers
+- `internal/adapters/postgresql/migrations/00003_create_customers.sql` – customers table
 
 ### Modified files
 

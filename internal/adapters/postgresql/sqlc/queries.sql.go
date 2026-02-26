@@ -9,6 +9,30 @@ import (
 	"context"
 )
 
+const createCustomer = `-- name: CreateCustomer :one
+INSERT INTO customers (email, password_hash, name)
+VALUES ($1, $2, $3) RETURNING id, email, password_hash, name, created_at
+`
+
+type CreateCustomerParams struct {
+	Email        string `json:"email"`
+	PasswordHash string `json:"password_hash"`
+	Name         string `json:"name"`
+}
+
+func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error) {
+	row := q.db.QueryRow(ctx, createCustomer, arg.Email, arg.PasswordHash, arg.Name)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Name,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createOrder = `-- name: CreateOrder :one
 INSERT INTO orders (
   customer_id
@@ -48,6 +72,23 @@ func (q *Queries) CreateOrderItem(ctx context.Context, arg CreateOrderItemParams
 		&i.ProductID,
 		&i.Quantity,
 		&i.PriceCents,
+	)
+	return i, err
+}
+
+const findCustomerByEmail = `-- name: FindCustomerByEmail :one
+SELECT id, email, password_hash, name, created_at FROM customers WHERE email = $1
+`
+
+func (q *Queries) FindCustomerByEmail(ctx context.Context, email string) (Customer, error) {
+	row := q.db.QueryRow(ctx, findCustomerByEmail, email)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Name,
+		&i.CreatedAt,
 	)
 	return i, err
 }

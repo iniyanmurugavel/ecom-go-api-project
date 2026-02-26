@@ -12,10 +12,14 @@ The API currently supports:
 
 - **`GET /health`** – simple health check (body: "all good")
 - **`GET /health/live`** – health + DB ping (returns 503 if DB is down)
-- **`GET /v1/products`** – list products with pagination (`?limit=20&offset=0`; max limit 100)
-- **`POST /v1/orders`** – create an order for existing products
+- **`POST /v1/auth/register`** – create customer (email, password, name)
+- **`POST /v1/auth/login`** – login and get JWT token
+- **`GET /v1/products`** – list products (requires `Authorization: Bearer <token>`)
+- **`POST /v1/orders`** – create order (requires JWT; customer ID from token, body has `items` only)
 
 If you run into connection errors or “role postgres does not exist”, see **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** for a summary of common issues and how to fix them.
+
+For **authentication (JWT)** — how to register, login, and use the token in Postman — see **[AUTH_README.md](AUTH_README.md)**.
 
 For a **high-level design** of how the API works (request flow: API → handler → service → SQLC → PostgreSQL, Docker, and what to do when you make changes or want hot reload), see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
@@ -276,8 +280,9 @@ Use [Postman](https://www.postman.com/downloads/) to send requests and inspect r
 |------|------------------------|--------------------------------------|
 | **1. Open Postman** | Install Postman (if needed), open it, and create a new request (e.g. New → HTTP Request). | Postman lets you set method, URL, headers, and body without writing code. Same ideas apply to any HTTP client (curl, browser, frontend). |
 | **2. Test health** | Set **Method** to `GET`, **URL** to `http://localhost:8080/health`. Click **Send**. | You should get status `200` and body `all good`. Use `GET /health/live` to also ping the DB (503 if DB is down). |
-| **3. Test list products** | Set **Method** to `GET`, **URL** to `http://localhost:8080/v1/products`. Optional: `?limit=10&offset=0`. Click **Send**. | You get JSON: an array of products. Pagination: default limit 20, max 100. |
-| **4. Test place order** | Set **Method** to `POST`, **URL** to `http://localhost:8080/v1/orders`. In **Headers** add `Content-Type: application/json`. In **Body** choose **raw** and **JSON**, then paste the JSON below. Click **Send**. | You get `201 Created` and the created order JSON, or `400`/`404`/`409`/`500` on error. |
+| **3. Register & login** | See **[AUTH_README.md](AUTH_README.md)** for full steps. Summary: `POST /v1/auth/register` with `{ email, password, name }`, then `POST /v1/auth/login` to get a token. | Copy the `token` from the login response. |
+| **4. Test list products** | Set **Method** to `GET`, **URL** to `http://localhost:8080/v1/products`. In **Headers** add `Authorization: Bearer <your-token>`. Click **Send**. | You get JSON: an array of products. Without token you get `401`. |
+| **5. Test place order** | Set **Method** to `POST`, **URL** to `http://localhost:8080/v1/orders`. **Headers:** `Authorization: Bearer <token>`, `Content-Type: application/json`. **Body (raw, JSON):** `{ "items": [{ "productId": 1, "quantity": 2 }] }`. Click **Send**. | You get `201 Created`. Customer ID comes from the token (not from body). |
 
 **Postman setup per request:**
 
@@ -285,14 +290,15 @@ Use [Postman](https://www.postman.com/downloads/) to send requests and inspect r
 |----------|--------|-----|---------|------|
 | Health check | `GET` | `http://localhost:8080/health` | (none) | (none) |
 | Health (with DB) | `GET` | `http://localhost:8080/health/live` | (none) | (none) |
-| List products | `GET` | `http://localhost:8080/v1/products` | (none) | Optional: `?limit=20&offset=0` |
-| Place order | `POST` | `http://localhost:8080/v1/orders` | `Content-Type: application/json` | See JSON below |
+| Register | `POST` | `http://localhost:8080/v1/auth/register` | `Content-Type: application/json` | `{ "email", "password", "name" }` |
+| Login | `POST` | `http://localhost:8080/v1/auth/login` | `Content-Type: application/json` | `{ "email", "password" }` |
+| List products | `GET` | `http://localhost:8080/v1/products` | `Authorization: Bearer <token>` | Optional: `?limit=20&offset=0` |
+| Place order | `POST` | `http://localhost:8080/v1/orders` | `Authorization: Bearer <token>`, `Content-Type: application/json` | `{ "items": [{ "productId", "quantity" }] }` |
 
-**Body for Place order (raw JSON):**
+**Body for Place order (raw JSON):** Customer ID comes from the JWT — do **not** send `customerId` in the body.
 
 ```json
 {
-  "customerId": 1,
   "items": [
     { "productId": 1, "quantity": 2 },
     { "productId": 2, "quantity": 1 }
@@ -300,7 +306,7 @@ Use [Postman](https://www.postman.com/downloads/) to send requests and inspect r
 }
 ```
 
-Use real `productId` values that exist in your `products` table (e.g. from the **List products** response). If you have no products yet, add rows via SQL or a seed script, or create a migration that inserts sample data.
+Use real `productId` values from the **List products** response. Get a token first via **Login** (see [AUTH_README.md](AUTH_README.md)).
 
 **What to check in Postman:**
 
@@ -331,12 +337,30 @@ Response (plain text):
 all good
 ```
 
-#### `GET /products`
+#### `POST /v1/auth/register` and `POST /v1/auth/login`
 
-Returns all products from the `products` table as JSON.
+Register creates a customer; login returns a JWT. See **[AUTH_README.md](AUTH_README.md)** for full details.
 
 ```bash
-curl "http://localhost:8080/v1/products?limit=20&offset=0"
+# Register
+curl -X POST http://localhost:8080/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"secret123","name":"Your Name"}'
+
+# Login (save the token from response)
+curl -X POST http://localhost:8080/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"secret123"}'
+```
+
+#### `GET /products`
+
+Returns all products from the `products` table as JSON. **Requires JWT.**
+
+```bash
+# First login to get TOKEN, then:
+curl "http://localhost:8080/v1/products?limit=20&offset=0" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 Example response:
@@ -357,15 +381,16 @@ This handler lives in `internal/products/handlers.go` and calls the service in `
 
 #### `POST /orders`
 
-Creates a new order for the given customer and list of items.
+Creates a new order. **Customer ID comes from the JWT** (not from the body). Body has only `items`.
 
 Request:
 
 ```bash
+# TOKEN from login response
 curl -X POST http://localhost:8080/v1/orders \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "customerId": 123,
     "items": [
       { "productId": 1, "quantity": 2 },
       { "productId": 2, "quantity": 1 }
@@ -378,7 +403,7 @@ If all products exist and have enough stock, you get back the created order:
 ```json
 {
   "id": 10,
-  "customer_id": 123,
+  "customer_id": 1,
   "created_at": "2024-01-01T00:00:00Z"
 }
 ```
