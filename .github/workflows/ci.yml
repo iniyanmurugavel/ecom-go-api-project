@@ -1,0 +1,64 @@
+# CI: build, run unit tests, validate migrations against a Postgres service, optionally run integration tests.
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ecom
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install goose
+        run: go install github.com/pressly/goose/v3/cmd/goose@latest
+
+      - name: Run migrations (validate schema)
+        env:
+          GOOSE_DRIVER: postgres
+          GOOSE_DBSTRING: host=localhost port=5432 user=postgres password=postgres dbname=ecom sslmode=disable
+          GOOSE_MIGRATION_DIR: internal/adapters/postgresql/migrations
+        run: goose up
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Unit tests
+        run: go test -v -count=1 ./internal/...
+
+      - name: Integration tests (with DB)
+        env:
+          GOOSE_DBSTRING: host=localhost port=5432 user=postgres password=postgres dbname=ecom sslmode=disable
+        run: go test -v -count=1 ./cmd/...

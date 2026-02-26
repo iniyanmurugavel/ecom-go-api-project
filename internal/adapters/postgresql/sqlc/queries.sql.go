@@ -106,3 +106,38 @@ func (q *Queries) ListProducts(ctx context.Context) ([]Product, error) {
 	}
 	return items, nil
 }
+
+const listProductsPaginated = `-- name: ListProductsPaginated :many
+SELECT id, name, price_in_centers, quantity, created_at FROM products ORDER BY id LIMIT $1 OFFSET $2
+`
+
+type ListProductsPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+func (q *Queries) ListProductsPaginated(ctx context.Context, arg ListProductsPaginatedParams) ([]Product, error) {
+	rows, err := q.db.Query(ctx, listProductsPaginated, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.PriceInCenters,
+			&i.Quantity,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

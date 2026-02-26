@@ -10,9 +10,10 @@ It is intentionally simple and is a great project for someone who has **just sta
 
 The API currently supports:
 
-- **`GET /health`** – simple health check
-- **`GET /products`** – list all products
-- **`POST /orders`** – create an order for existing products
+- **`GET /health`** – simple health check (body: "all good")
+- **`GET /health/live`** – health + DB ping (returns 503 if DB is down)
+- **`GET /v1/products`** – list products with pagination (`?limit=20&offset=0`; max limit 100)
+- **`POST /v1/orders`** – create an order for existing products
 
 If you run into connection errors or “role postgres does not exist”, see **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** for a summary of common issues and how to fix them.
 
@@ -21,6 +22,10 @@ For a **high-level design** of how the API works (request flow: API → handler 
 For **development vs deployment** (use Docker or your own DB in dev? deploy in Docker later?), **Docker basics**, and a **command reference**, see **[DEVELOPMENT_AND_DEPLOYMENT.md](DEVELOPMENT_AND_DEPLOYMENT.md)**.
 
 **If something is unclear:** The code has short comments (e.g. in `cmd/api.go` for middleware, `cmd/main.go` for startup). Use the links above for request flow, migrations, and running the project.
+
+For a **summary of improvements** (connection pool, repository interfaces, tests, CI, etc.), see **[IMPROVEMENTS.md](IMPROVEMENTS.md)**.
+
+**Scalability and testability (what the codebase does):** The API uses a **connection pool** (`pgxpool`) so many requests can use the DB at once; **repository interfaces** in `internal/products` and `internal/orders` so services can be tested with mock repos; **versioned routes** (`/v1/products`, `/v1/orders`) so you can add v2 later; **pagination** on list products (`?limit=&offset=`); **graceful shutdown** (Ctrl+C lets in-flight requests finish); **health with DB ping** (`/health/live`) for load balancers; and **rate limiting** per IP (configurable via `RATE_LIMIT_REQUESTS_PER_MINUTE`, default 100/min). Comments in the code explain each layer.
 
 ---
 
@@ -270,17 +275,18 @@ Use [Postman](https://www.postman.com/downloads/) to send requests and inspect r
 | Step | What to do in Postman | Understand & do for future learning |
 |------|------------------------|--------------------------------------|
 | **1. Open Postman** | Install Postman (if needed), open it, and create a new request (e.g. New → HTTP Request). | Postman lets you set method, URL, headers, and body without writing code. Same ideas apply to any HTTP client (curl, browser, frontend). |
-| **2. Test health** | Set **Method** to `GET`, **URL** to `http://localhost:8080/health`. Click **Send**. | You should get status `200` and body `all good`. This confirms the server is running and the route works. |
-| **3. Test list products** | Set **Method** to `GET`, **URL** to `http://localhost:8080/products`. Click **Send**. | You get JSON: an array of products (or `[]` if the table is empty). In code, this is handled by `products.ListProducts` and the repo’s `ListProducts` query. |
-| **4. Test place order** | Set **Method** to `POST`, **URL** to `http://localhost:8080/orders`. In **Headers** add `Content-Type: application/json`. In **Body** choose **raw** and **JSON**, then paste the JSON below. Click **Send**. | You get `201 Created` and the created order JSON, or `404`/`500` on error. In code, the handler reads JSON with `json.Read`, then calls `orders.PlaceOrder` (which uses a DB transaction). |
+| **2. Test health** | Set **Method** to `GET`, **URL** to `http://localhost:8080/health`. Click **Send**. | You should get status `200` and body `all good`. Use `GET /health/live` to also ping the DB (503 if DB is down). |
+| **3. Test list products** | Set **Method** to `GET`, **URL** to `http://localhost:8080/v1/products`. Optional: `?limit=10&offset=0`. Click **Send**. | You get JSON: an array of products. Pagination: default limit 20, max 100. |
+| **4. Test place order** | Set **Method** to `POST`, **URL** to `http://localhost:8080/v1/orders`. In **Headers** add `Content-Type: application/json`. In **Body** choose **raw** and **JSON**, then paste the JSON below. Click **Send**. | You get `201 Created` and the created order JSON, or `400`/`404`/`409`/`500` on error. |
 
 **Postman setup per request:**
 
 | Endpoint | Method | URL | Headers | Body |
 |----------|--------|-----|---------|------|
 | Health check | `GET` | `http://localhost:8080/health` | (none) | (none) |
-| List products | `GET` | `http://localhost:8080/products` | (none) | (none) |
-| Place order | `POST` | `http://localhost:8080/orders` | `Content-Type: application/json` | See JSON below |
+| Health (with DB) | `GET` | `http://localhost:8080/health/live` | (none) | (none) |
+| List products | `GET` | `http://localhost:8080/v1/products` | (none) | Optional: `?limit=20&offset=0` |
+| Place order | `POST` | `http://localhost:8080/v1/orders` | `Content-Type: application/json` | See JSON below |
 
 **Body for Place order (raw JSON):**
 
@@ -316,6 +322,7 @@ Quick check that the server is alive.
 
 ```bash
 curl http://localhost:8080/health
+# With DB check: curl http://localhost:8080/health/live
 ```
 
 Response (plain text):
@@ -329,7 +336,7 @@ all good
 Returns all products from the `products` table as JSON.
 
 ```bash
-curl http://localhost:8080/products
+curl "http://localhost:8080/v1/products?limit=20&offset=0"
 ```
 
 Example response:
@@ -355,7 +362,7 @@ Creates a new order for the given customer and list of items.
 Request:
 
 ```bash
-curl -X POST http://localhost:8080/orders \
+curl -X POST http://localhost:8080/v1/orders \
   -H "Content-Type: application/json" \
   -d '{
     "customerId": 123,
@@ -411,7 +418,7 @@ Let’s walk through what happens for `GET /products`:
    - Creates the handler:
      - `productHandler := products.NewHandler(productService)`
    - Registers the route:
-     - `r.Get("/products", productHandler.ListProducts)`
+     - `r.Get("/v1/products", productHandler.ListProducts)`
 
 3. **`products/handlers.go` – `ListProducts` handler**:
    - Calls the service:

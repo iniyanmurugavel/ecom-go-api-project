@@ -4,6 +4,9 @@ SELECT
 FROM
   products;
 
+-- name: ListProductsPaginated :many
+SELECT * FROM products ORDER BY id LIMIT $1 OFFSET $2;
+
 -- name: FindProductByID :one
 SELECT
   *

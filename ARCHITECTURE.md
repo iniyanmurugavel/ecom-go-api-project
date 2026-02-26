@@ -10,8 +10,8 @@ This document explains how a request flows from the client to the database, how 
   Postman/curl                    Your Go app (runs on host)              Docker
   ────────────                   ──────────────────────────              ─────
        │                                    │                                  │
-       │  GET /products                     │                                  │
-       │  POST /orders                      │                                  │
+       │  GET /v1/products                  │                                  │
+       │  POST /v1/orders                   │                                  │
        ▼                                    │                                  │
   ┌─────────┐    ┌─────────┐    ┌─────────┐│   ┌─────────┐    ┌──────────────┐
   │  Chi    │───▶│ Handler │───▶│ Service ││──▶│  Repo   │───▶│  PostgreSQL  │
@@ -36,20 +36,20 @@ The Go binary runs on your machine; only the database runs in Docker. No need to
 
 ## 2. Flow for Two Example Requests
 
-### GET /products
+### GET /v1/products
 
-1. **Chi** matches `GET /products` → `products.ListProducts` handler.
-2. **Handler** calls `service.ListProducts(ctx)`.
-3. **Service** calls `repo.ListProducts(ctx)` (repo = sqlc-generated `Queries`).
-4. **Repo** runs `SELECT * FROM products` (from `queries.sql`), returns `[]Product`.
+1. **Chi** matches `GET /v1/products` → `products.ListProducts` handler.
+2. **Handler** reads query params `limit` (default 20, max 100) and `offset` (default 0), calls `service.ListProducts(ctx, limit, offset)`.
+3. **Service** calls `repo.ListProductsPaginated(ctx, arg)` (repo implements `products.Repository`; sqlc-generated `Queries` is one implementation).
+4. **Repo** runs `SELECT * FROM products ORDER BY id LIMIT $1 OFFSET $2`, returns `[]Product`.
 5. **Handler** writes JSON with `json.Write(w, 200, products)`.
 6. Client gets the JSON response.
 
-No transaction needed; one read-only query.
+No transaction needed; one read-only query. Pagination keeps responses bounded.
 
 ### POST /orders
 
-1. **Chi** matches `POST /orders` → `orders.PlaceOrder` handler.
+1. **Chi** matches `POST /v1/orders` → `orders.PlaceOrder` handler.
 2. **Handler** reads body with `json.Read(r, &tempOrder)` (customerId, items[]).
 3. **Handler** calls `service.PlaceOrder(ctx, tempOrder)`.
 4. **Service**:

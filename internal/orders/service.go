@@ -1,4 +1,5 @@
-// PlaceOrder business logic: validate, run in one transaction, create order + order_items; rollback on any error.
+// Package orders: business logic for placing an order.
+// Validates input, runs everything in one DB transaction, rolls back on any error.
 package orders
 
 import (
@@ -6,37 +7,49 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/jackc/pgx/v5"
 	repo "github.com/sikozonpc/ecom/internal/adapters/postgresql/sqlc"
 )
 
+// Domain errors: handlers map these to HTTP status (400, 404, 409, 500).
 var (
+	ErrInvalidInput    = errors.New("invalid input")
 	ErrProductNotFound = errors.New("product not found")
 	ErrProductNoStock  = errors.New("product has not enough stock")
 )
 
 type svc struct {
-	repo *repo.Queries
-	db   *pgx.Conn // need raw conn for Begin(); repo runs queries inside the tx via WithTx(tx)
+	repo     OrderRepo     // WithTx(tx) gives an OrderTxRepo for the transaction
+	beginner TxBeginner    // Begin(ctx) starts a transaction (e.g. *pgxpool.Pool)
+	logger   interface {
+		Info(msg string, args ...any)
+		Error(msg string, args ...any)
+	}
 }
 
-func NewService(repo *repo.Queries, db *pgx.Conn) Service {
-	return &svc{repo: repo, db: db}
+// NewService builds the order service. repo is usually *sqlc.Queries; beginner is usually *pgxpool.Pool.
+// In tests you pass mocks that implement OrderRepo and TxBeginner.
+func NewService(repo OrderRepo, beginner TxBeginner, logger interface {
+	Info(msg string, args ...any)
+	Error(msg string, args ...any)
+}) Service {
+	return &svc{repo: repo, beginner: beginner, logger: logger}
 }
 
+// PlaceOrder validates customerId and items, then runs in one transaction:
+// create order, for each item check product and stock, create order_item. Rollback on any error.
 func (s *svc) PlaceOrder(ctx context.Context, tempOrder createOrderParams) (repo.Order, error) {
 	if tempOrder.CustomerID == 0 {
-		return repo.Order{}, fmt.Errorf("customer ID is required")
+		return repo.Order{}, fmt.Errorf("%w: customer ID is required", ErrInvalidInput)
 	}
 	if len(tempOrder.Items) == 0 {
-		return repo.Order{}, fmt.Errorf("at least one item is required")
+		return repo.Order{}, fmt.Errorf("%w: at least one item is required", ErrInvalidInput)
 	}
 
-	tx, err := s.db.Begin(ctx)
+	tx, err := s.beginner.Begin(ctx)
 	if err != nil {
 		return repo.Order{}, err
 	}
-	defer tx.Rollback(ctx) // commit below clears this; if we return early, tx is rolled back
+	defer tx.Rollback(ctx) // if we return before Commit, Rollback runs (no-op after Commit)
 
 	qtx := s.repo.WithTx(tx) // all following queries use this transaction
 
@@ -62,7 +75,7 @@ func (s *svc) PlaceOrder(ctx context.Context, tempOrder createOrderParams) (repo
 		if err != nil {
 			return repo.Order{}, err
 		}
-		// TODO: decrement product.Quantity (update products set quantity = quantity - ? where id = ?)
+		// TODO: decrement product.Quantity (UPDATE products SET quantity = quantity - $1 WHERE id = $2)
 	}
 
 	tx.Commit(ctx)
