@@ -31,6 +31,29 @@ Yes. If you already have Postgres (e.g. Postgres.app, Homebrew) and want to use 
 
 The app doesn’t care whether the DB is in Docker or on your host; it only cares about the connection string in `.env`. Using Docker is recommended so everyone has the same setup and you avoid “works on my machine” issues.
 
+
+### How to reflect changes in your local DB
+
+"Reflect in my local DB" means: make the database (tables, columns, data) match what the app expects. You do that by running **migrations** (and optionally seeding). Which DB is used depends on `.env`.
+
+**If your local DB is Docker (default):**
+
+1. Start DB: `docker compose up -d`
+2. In `.env`: `GOOSE_DBSTRING="host=localhost port=15432 user=postgres password=postgres dbname=ecom sslmode=disable"`
+3. Apply migrations: `source .env` then `goose up`
+4. Optional seed: `docker exec ecom-postgres psql -U postgres -d ecom -c "INSERT INTO products (name, price_in_centers, quantity) VALUES ('Sample Product A', 1999, 10), ('Sample Product B', 2999, 5), ('Sample Product C', 999, 20);"`
+5. See data: use a DB client with **localhost, port 15432**, database **ecom** — or run `docker exec ecom-postgres psql -U postgres -d ecom -c "SELECT * FROM products;"`
+
+**If your local DB is Postgres on your Mac (e.g. Postgres.app):**
+
+1. Create database `ecom` and user (e.g. postgres/postgres). Mac Postgres is usually **port 5432**.
+2. In `.env`: `GOOSE_DBSTRING="host=localhost port=5432 user=postgres password=postgres dbname=ecom sslmode=disable"`
+3. Apply migrations: `source .env` then `goose up`
+4. Run API: `go run cmd/*.go` — app uses the same `.env`, so it talks to your Mac Postgres.
+5. See data: DB client → **localhost, port 5432**, database **ecom**.
+
+**Summary:** Set the DB you want in `.env` (port **15432** = Docker, **5432** = typical Mac Postgres). Then run `goose up`. That DB is your local DB; schema and data reflect there.
+
 ---
 
 ## 2. Later: deploying “in Docker”

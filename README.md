@@ -20,6 +20,8 @@ For a **high-level design** of how the API works (request flow: API → handler 
 
 For **development vs deployment** (use Docker or your own DB in dev? deploy in Docker later?), **Docker basics**, and a **command reference**, see **[DEVELOPMENT_AND_DEPLOYMENT.md](DEVELOPMENT_AND_DEPLOYMENT.md)**.
 
+**If something is unclear:** The code has short comments (e.g. in `cmd/api.go` for middleware, `cmd/main.go` for startup). Use the links above for request flow, migrations, and running the project.
+
 ---
 
 ### Who this project is for

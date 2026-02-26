@@ -18,10 +18,13 @@ import (
 func (app *application) mount() http.Handler {
 	r := chi.NewRouter()
 
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer) // catch panics, return 500
+	// Middleware runs on every request before it reaches your handler. Order matters.
+	r.Use(middleware.RequestID) // gives each request a unique ID (useful for logs and rate limiting)
+	r.Use(middleware.RealIP)    // reads the real client IP from headers (e.g. behind a proxy)
+	r.Use(middleware.Logger)    // logs each request (method, path, status, duration)
+	r.Use(middleware.Recoverer) // if a handler panics, this catches it and returns 500 instead of crashing the server
+
+	// If a request takes longer than 60 seconds, cancel it. ctx.Done() will signal so your code can stop.
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
