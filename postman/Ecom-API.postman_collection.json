@@ -1,0 +1,111 @@
+{
+  "info": {
+    "name": "Ecom API",
+    "description": "Ecommerce API - Health, Auth (Register/Login), Products, Orders. Run in order: 1. Health, 2. Register, 3. Login, 4. Products, 5. Orders.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        },
+        "description": "Quick check that API is running."
+      }
+    },
+    {
+      "name": "2. Register",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"secret123\",\n  \"name\": \"Test User\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/auth/register",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "auth", "register"]
+        },
+        "description": "Create a new customer. Run first (or skip if already registered)."
+      }
+    },
+    {
+      "name": "3. Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var json = pm.response.json();",
+              "if (json.token) { pm.environment.set('token', json.token); }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"secret123\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/auth/login",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "auth", "login"]
+        },
+        "description": "Login to get JWT. Token is auto-saved to {{token}}."
+      }
+    },
+    {
+      "name": "4. Get Products",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key": "Authorization", "value": "Bearer {{token}}"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/products?limit=20&offset=0",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "products"],
+          "query": [
+            {"key": "limit", "value": "20"},
+            {"key": "offset", "value": "0"}
+          ]
+        },
+        "description": "List products. Requires token - run Login first."
+      }
+    },
+    {
+      "name": "5. Place Order",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Authorization", "value": "Bearer {{token}}"},
+          {"key": "Content-Type", "value": "application/json"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    { \"productId\": 1, \"quantity\": 2 },\n    { \"productId\": 2, \"quantity\": 1 }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/v1/orders",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "orders"]
+        },
+        "description": "Create order. Customer ID from token. Use productId from Get Products."
+      }
+    }
+  ]
+}

@@ -7,11 +7,13 @@ package repo
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createCustomer = `-- name: CreateCustomer :one
 INSERT INTO customers (email, password_hash, name)
-VALUES ($1, $2, $3) RETURNING id, email, password_hash, name, created_at
+VALUES ($1, $2, $3) RETURNING id, email, name, created_at
 `
 
 type CreateCustomerParams struct {
@@ -20,13 +22,19 @@ type CreateCustomerParams struct {
 	Name         string `json:"name"`
 }
 
-func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error) {
+type CreateCustomerRow struct {
+	ID        int64              `json:"id"`
+	Email     string             `json:"email"`
+	Name      string             `json:"name"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) (CreateCustomerRow, error) {
 	row := q.db.QueryRow(ctx, createCustomer, arg.Email, arg.PasswordHash, arg.Name)
-	var i Customer
+	var i CreateCustomerRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
-		&i.PasswordHash,
 		&i.Name,
 		&i.CreatedAt,
 	)
@@ -77,7 +85,9 @@ func (q *Queries) CreateOrderItem(ctx context.Context, arg CreateOrderItemParams
 }
 
 const findCustomerByEmail = `-- name: FindCustomerByEmail :one
-SELECT id, email, password_hash, name, created_at FROM customers WHERE email = $1
+SELECT id, email, password_hash, name, created_at
+FROM customers
+WHERE email = $1
 `
 
 func (q *Queries) FindCustomerByEmail(ctx context.Context, email string) (Customer, error) {

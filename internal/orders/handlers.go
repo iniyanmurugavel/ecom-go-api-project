@@ -9,7 +9,7 @@ import (
 	"github.com/sikozonpc/ecom/internal/json"
 )
 
-// NewHandler returns the HTTP handler for orders. Needs the service and a logger.
+// NewHandler returns the HTTP handler for orders.
 func NewHandler(service Service, logger interface {
 	Info(msg string, args ...any)
 	Error(msg string, args ...any)
@@ -46,7 +46,6 @@ func (h *handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	tempOrder := createOrderParams{CustomerID: customerID, Items: body.Items}
 	createdOrder, err := h.service.PlaceOrder(r.Context(), tempOrder)
 	if err != nil {
-		// Map domain errors to HTTP status so clients get stable status codes
 		switch {
 		case errors.Is(err, ErrInvalidInput):
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -55,7 +54,7 @@ func (h *handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		case errors.Is(err, ErrProductNoStock):
-			http.Error(w, err.Error(), http.StatusConflict) // 409 Conflict
+			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		default:
 			h.logger.Error("place order failed", "error", err)

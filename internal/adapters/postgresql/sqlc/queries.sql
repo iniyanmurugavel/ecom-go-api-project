@@ -26,7 +26,9 @@ VALUES ($1, $2, $3, $4) RETURNING *;
 
 -- name: CreateCustomer :one
 INSERT INTO customers (email, password_hash, name)
-VALUES ($1, $2, $3) RETURNING *;
+VALUES ($1, $2, $3) RETURNING id, email, name, created_at;
 
 -- name: FindCustomerByEmail :one
-SELECT * FROM customers WHERE email = $1;
+SELECT id, email, password_hash, name, created_at
+FROM customers
+WHERE email = $1;

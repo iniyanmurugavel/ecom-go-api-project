@@ -1,81 +1,106 @@
-// Auth handlers: register and login. Return JWT on success.
 package auth
 
 import (
+	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 
-	"github.com/sikozonpc/ecom/internal/json"
+	internaljson "github.com/sikozonpc/ecom/internal/json"
 )
 
-// NewHandler returns the auth HTTP handler.
-func NewHandler(service Service, logger interface {
-	Error(msg string, args ...any)
-}) *handler {
-	return &handler{service: service, logger: logger}
+type registerRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Name     string `json:"name"`
 }
 
-type handler struct {
-	service Service
-	logger  interface {
-		Error(msg string, args ...any)
-	}
+type loginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
-// Register handles POST /v1/auth/register. Body: { email, password, name }.
-func (h *handler) Register(w http.ResponseWriter, r *http.Request) {
-	var in RegisterInput
-	if err := json.Read(r, &in); err != nil {
-		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
+type loginResponse struct {
+	Token      string `json:"token"`
+	CustomerID int64  `json:"customer_id"`
+	Email      string `json:"email"`
+}
+
+type Handler struct {
+	svc    Service
+	secret []byte
+}
+
+func NewHandler(svc Service, secret []byte) *Handler {
+	return &Handler{svc: svc, secret: secret}
+}
+
+// Register handles POST /v1/auth/register
+func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
+	var req registerRequest
+	if err := internaljson.Read(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if in.Email == "" || in.Password == "" || in.Name == "" {
-		http.Error(w, `{"error":"email, password, and name are required"}`, http.StatusBadRequest)
+	if req.Email == "" || req.Password == "" || req.Name == "" {
+		writeError(w, http.StatusBadRequest, "email, password, and name are required")
 		return
 	}
-	customer, err := h.service.Register(r.Context(), in)
+	id, email, name, err := h.svc.Register(r.Context(), req.Email, req.Password, req.Name)
 	if err != nil {
 		if errors.Is(err, ErrEmailExists) {
-			http.Error(w, `{"error":"email already registered"}`, http.StatusConflict)
+			writeError(w, http.StatusConflict, "email already registered")
 			return
 		}
-		h.logger.Error("register failed", "error", err)
-		http.Error(w, `{"error":"registration failed"}`, http.StatusInternalServerError)
+		log.Println("auth register:", err)
+		writeError(w, http.StatusInternalServerError, "registration failed")
 		return
 	}
-	// Don't return password_hash; return customer without sensitive fields
-	resp := map[string]any{
-		"id":    customer.ID,
-		"email": customer.Email,
-		"name":  customer.Name,
-	}
-	json.Write(w, http.StatusCreated, resp)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"id":    id,
+		"email": email,
+		"name":  name,
+	})
 }
 
-// Login handles POST /v1/auth/login. Body: { email, password }. Returns JWT.
-func (h *handler) Login(w http.ResponseWriter, r *http.Request) {
-	var in LoginInput
-	if err := json.Read(r, &in); err != nil {
-		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
+// Login handles POST /v1/auth/login
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+	var req loginRequest
+	if err := internaljson.Read(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if in.Email == "" || in.Password == "" {
-		http.Error(w, `{"error":"email and password are required"}`, http.StatusBadRequest)
+	if req.Email == "" || req.Password == "" {
+		writeError(w, http.StatusBadRequest, "email and password are required")
 		return
 	}
-	customerID, email, token, err := h.service.Login(r.Context(), in)
+	_, customerID, email, err := h.svc.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, ErrInvalidCreds) {
-			http.Error(w, `{"error":"invalid email or password"}`, http.StatusUnauthorized)
+			writeError(w, http.StatusUnauthorized, "invalid email or password")
 			return
 		}
-		h.logger.Error("login failed", "error", err)
-		http.Error(w, `{"error":"login failed"}`, http.StatusInternalServerError)
+		log.Println("auth login:", err)
+		writeError(w, http.StatusInternalServerError, "login failed")
 		return
 	}
-	json.Write(w, http.StatusOK, map[string]any{
-		"token":       token,
-		"customer_id": customerID,
-		"email":       email,
+	token, err := SignToken(h.secret, customerID, email)
+	if err != nil {
+		log.Println("auth sign token:", err)
+		writeError(w, http.StatusInternalServerError, "login failed")
+		return
+	}
+	internaljson.Write(w, http.StatusOK, loginResponse{
+		Token:      token,
+		CustomerID: customerID,
+		Email:      email,
 	})
+}
+
+func writeError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }

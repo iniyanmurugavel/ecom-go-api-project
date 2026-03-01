@@ -23,7 +23,6 @@ func main() {
 	_ = godotenv.Load(".env")
 	_ = godotenv.Load("../.env")
 
-	// Logger used by handlers and services (and main). Structured logs go to stdout.
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
