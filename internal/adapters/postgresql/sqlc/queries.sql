@@ -24,6 +24,9 @@ INSERT INTO orders (
 INSERT INTO order_items (order_id, product_id, quantity, price_cents)
 VALUES ($1, $2, $3, $4) RETURNING *;
 
+-- name: DecrementProductStock :one
+UPDATE products SET quantity = quantity - $1 WHERE id = $2 AND quantity >= $1 RETURNING id;
+
 -- name: CreateCustomer :one
 INSERT INTO customers (email, password_hash, name)
 VALUES ($1, $2, $3) RETURNING id, email, name, created_at;

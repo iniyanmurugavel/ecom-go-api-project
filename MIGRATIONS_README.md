@@ -213,7 +213,7 @@ When you **change a table** or add a new one:
    ```
    - SQLC reads the updated schema + queries and updates Go structs/methods.
 4. **Update services/handlers** to use any new fields or queries.
-5. **Restart the API** (`go run cmd/*.go` or `air`).
+5. **Restart the API** (`go run ./cmd` or `air`).
 
 > Important: the **data currently in the DB** is affected only by what your migration SQL does (ALTER TABLE, DROP COLUMN, etc.). SQLC just regenerates Go code to match the new schema; it does not move or delete data by itself.
 
@@ -259,9 +259,9 @@ Use this file as your personal reference when you ask: “If I change this table
 **Why:** Your app and your DB client are talking to **different PostgreSQL instances**.
 
 - The **API** uses the connection from `.env`: **port 15432**, database **ecom**, user **postgres** (this is the **Docker** Postgres).
-- Many DB clients default to **port 5432**. On your Mac, something else (e.g. Postgres.app, Homebrew Postgres) often runs on 5432. That is a **different** server and a **different** database. It has no `ecom` database or no data in it.
+- Many DB clients default to **port 5432**. Mac Postgres (Postgres.app, Homebrew) often runs on 5432. That is a **different** server. This project uses Docker on **port 15432**.
 
-So the data **is** in the database – but in the one listening on **15432** (Docker), not 5432.
+So the data **is** in the database – the one in Docker (port 15432).
 
 **What to do:**
 
@@ -271,7 +271,7 @@ So the data **is** in the database – but in the one listening on **15432** (Do
    |----------|--------|----------|----------|----------|------|
    | localhost | 15432 | ecom     | postgres | postgres | off  |
 
-   Use **port 15432**, not 5432. After that, you should see the same products and orders (and order_items) that the API reads and writes.
+   Use **port 15432**. After that, you should see the same products and orders (and order_items) that the API reads and writes.
 
 2. **Or view data from the terminal (no GUI):**
    ```bash
@@ -281,4 +281,4 @@ So the data **is** in the database – but in the one listening on **15432** (Do
    ```
    This runs SQL inside the Docker Postgres container, so you always see the same data as the API.
 
-**Summary:** The API works because it connects to Postgres on **port 15432** (Docker). To see that same data, your DB client must also use **port 15432** and database **ecom**. If you use port 5432, you're looking at a different server where the ecom data does not exist.
+**Summary:** The API connects to Postgres on **port 15432** (Docker). Your DB client must use **port 15432** and database **ecom** to see the same data.

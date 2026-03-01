@@ -1,5 +1,9 @@
 // Package orders: repository interfaces for order data access.
 // The service uses these instead of concrete *repo.Queries so we can test with mocks.
+//
+// LEARNING: Interfaces let us "inject" different implementations. In production we use
+// *repo.Queries (sqlc-generated). In tests we use mockOrderTxRepo that returns fixed data.
+// The service doesn't know or care which one it gets — that's dependency injection.
 package orders
 
 import (
@@ -9,12 +13,13 @@ import (
 	repo "github.com/sikozonpc/ecom/internal/adapters/postgresql/sqlc"
 )
 
-// OrderTxRepo runs inside a transaction (CreateOrder, FindProductByID, CreateOrderItem).
+// OrderTxRepo runs inside a transaction (CreateOrder, FindProductByID, CreateOrderItem, DecrementProductStock).
 // *repo.Queries returned by WithTx(tx) implements this.
 type OrderTxRepo interface {
 	CreateOrder(ctx context.Context, customerID int64) (repo.Order, error)
 	FindProductByID(ctx context.Context, id int64) (repo.Product, error)
 	CreateOrderItem(ctx context.Context, arg repo.CreateOrderItemParams) (repo.OrderItem, error)
+	DecrementProductStock(ctx context.Context, arg repo.DecrementProductStockParams) (int64, error)
 }
 
 // OrderRepo can run queries in a transaction via WithTx.

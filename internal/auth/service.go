@@ -1,3 +1,5 @@
+// Package auth: business logic for registration and login.
+// Uses bcrypt for password hashing, JWT for tokens. Handlers sign the token; service returns user info.
 package auth
 
 import (
@@ -21,14 +23,16 @@ type Service interface {
 }
 
 type svc struct {
-	repo *repo.Queries
+	repo AuthRepository
 }
 
-func NewService(repo *repo.Queries) Service {
+func NewService(repo AuthRepository) Service {
 	return &svc{repo: repo}
 }
 
 func (s *svc) Register(ctx context.Context, email, password, name string) (int64, string, string, error) {
+	// LEARNING: Never store plain passwords. bcrypt hashes with a salt; CompareHashAndPassword
+	// verifies later. DefaultCost is 10 (2^10 iterations — balance of security and speed).
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return 0, "", "", err
@@ -58,6 +62,9 @@ func (s *svc) Login(ctx context.Context, email, password string) (string, int64,
 	return "", cust.ID, cust.Email, nil
 }
 
+// isUniqueViolation checks if the error is a PostgreSQL unique constraint violation.
+// LEARNING: PostgreSQL error code 23505 = unique_violation. We use errors.As to unwrap
+// the error chain and check if it's a *pgconn.PgError with that code.
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"

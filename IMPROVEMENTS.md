@@ -100,7 +100,7 @@ docker compose up -d
 source .env && goose up
 
 # 3. Run API
-go run cmd/*.go
+go run ./cmd
 ```
 
 **Postman:**

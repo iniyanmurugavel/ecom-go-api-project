@@ -2,6 +2,8 @@
 
 Follow these steps in order. No prior setup needed if you have Docker and Go installed.
 
+**New to Go?** See [docs/LEARNER_GUIDE.md](docs/LEARNER_GUIDE.md) for a learning path and diagrams.
+
 ---
 
 ## Prerequisites
@@ -74,13 +76,14 @@ time=... level=INFO msg="server started" addr=:8080
 curl http://localhost:8080/health
 # → all good
 
-# Get products
-curl "http://localhost:8080/products?limit=5"
+# Get products (requires token — register/login first)
+curl "http://localhost:8080/v1/products?limit=5" -H "Authorization: Bearer YOUR_TOKEN"
 
-# Place order
-curl -X POST http://localhost:8080/orders \
+# Place order (customer from JWT, not body)
+curl -X POST http://localhost:8080/v1/orders \
+  -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"customerId":1,"items":[{"productId":1,"quantity":2}]}'
+  -d '{"items":[{"productId":1,"quantity":2}]}'
 ```
 
 **Option B: Postman**
@@ -142,11 +145,21 @@ curl -X POST http://localhost:8080/v1/orders \
 
 ---
 
+## Connect a DB Client (TablePlus, DBeaver, etc.)
+
+| Host     | Port   | Database | User     | Password | SSL  |
+|----------|--------|----------|----------|----------|------|
+| localhost | 15432 | ecom     | postgres | postgres | off  |
+
+**Important:** Use **port 15432**, not 5432. Port 5432 is often used by Mac Postgres (which doesn't have the `postgres` role).
+
+---
+
 ## If Something Fails
 
 | Error | Fix |
 |-------|-----|
 | "Cannot connect to Docker daemon" | Start Docker Desktop |
 | "port 8080 already in use" | Stop other app on 8080, or use `HTTP_ADDR=:8081 go run ./cmd` |
-| "role postgres does not exist" | See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
+| "role postgres does not exist" | Use **port 15432** in your DB client (not 5432). See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
 | **Register/login not working** | Use `POST /v1/auth/register` and `POST /v1/auth/login`. Add `JWT_SECRET` to `.env` (32+ chars). |

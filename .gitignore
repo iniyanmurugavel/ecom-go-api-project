@@ -1,5 +1,5 @@
 # Local env with real credentials (use .env.example as template)
-#.env
+.env
 
 # Binaries
 *.exe

@@ -1,5 +1,8 @@
 // Handlers: HTTP layer only. Parse request, call service, map errors to status codes, write JSON.
 // No business logic here — that lives in the service.
+//
+// LEARNING: Handler reads query params (limit, offset), applies defaults, calls service,
+// and writes JSON. Pagination params are validated here; the service just passes them to the repo.
 package products
 
 import (
@@ -54,7 +57,7 @@ func (h *handler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	products, err := h.service.ListProducts(r.Context(), limit, offset)
 	if err != nil {
 		h.logger.Error("list products failed", "error", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		json.WriteError(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 	json.Write(w, http.StatusOK, products)

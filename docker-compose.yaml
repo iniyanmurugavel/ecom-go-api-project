@@ -1,6 +1,5 @@
 # Single database for this project. The API, Goose, and any DB client (e.g. TablePlus)
-# all connect to this one Postgres. Port 15432 on the host avoids clashes with
-# another Postgres on your machine (e.g. Mac Postgres on 5432).
+# All connect to this one Postgres. Port 15432 avoids conflict with Mac Postgres on 5432.
 # Start: docker compose up -d
 # Stop:  docker compose down (keeps data) or docker compose down -v (removes data)
 services:
@@ -12,7 +11,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: ecom
     ports:
-      # host:container — use port 15432 in .env and DB clients
+      # host:container — 15432 avoids Mac Postgres on 5432. CI uses 5432 (different environment).
       - "15432:5432"
     volumes:
       # Data persists across "docker compose down" (lost only with down -v)

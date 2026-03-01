@@ -23,3 +23,13 @@ func GetInt(key string, fallback int) int {
 	}
 	return fallback
 }
+
+// GetInt32 returns the int32 value of os.Getenv(key), or fallback if unset/empty/invalid.
+func GetInt32(key string, fallback int32) int32 {
+	if val := os.Getenv(key); val != "" {
+		if n, err := strconv.ParseInt(val, 10, 32); err == nil {
+			return int32(n)
+		}
+	}
+	return fallback
+}

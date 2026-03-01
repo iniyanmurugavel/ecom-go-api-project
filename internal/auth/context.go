@@ -4,6 +4,8 @@ package auth
 import "context"
 
 // contextKey is the type for context keys (avoids collisions).
+// LEARNING: Using a custom type (not string) for context keys prevents other packages from
+// accidentally using the same key. context.WithValue(ctx, key, value) stores; ctx.Value(key) retrieves.
 type contextKey string
 
 const customerIDKey contextKey = "customer_id"

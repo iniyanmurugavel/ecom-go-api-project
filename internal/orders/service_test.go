@@ -43,11 +43,12 @@ func (fakeTx) Conn() *pgx.Conn { return nil }
 // Ensure fakeTx implements pgx.Tx at compile time.
 var _ pgx.Tx = fakeTx{}
 
-// mockOrderTxRepo controls CreateOrder, FindProductByID, CreateOrderItem for tests.
+// mockOrderTxRepo controls CreateOrder, FindProductByID, CreateOrderItem, DecrementProductStock for tests.
 type mockOrderTxRepo struct {
-	createOrder     func(context.Context, int64) (repo.Order, error)
-	findProductByID func(context.Context, int64) (repo.Product, error)
-	createOrderItem func(context.Context, repo.CreateOrderItemParams) (repo.OrderItem, error)
+	createOrder           func(context.Context, int64) (repo.Order, error)
+	findProductByID       func(context.Context, int64) (repo.Product, error)
+	createOrderItem       func(context.Context, repo.CreateOrderItemParams) (repo.OrderItem, error)
+	decrementProductStock func(context.Context, repo.DecrementProductStockParams) (int64, error)
 }
 
 func (m *mockOrderTxRepo) CreateOrder(ctx context.Context, customerID int64) (repo.Order, error) {
@@ -69,6 +70,13 @@ func (m *mockOrderTxRepo) CreateOrderItem(ctx context.Context, arg repo.CreateOr
 		return m.createOrderItem(ctx, arg)
 	}
 	return repo.OrderItem{}, nil
+}
+
+func (m *mockOrderTxRepo) DecrementProductStock(ctx context.Context, arg repo.DecrementProductStockParams) (int64, error) {
+	if m.decrementProductStock != nil {
+		return m.decrementProductStock(ctx, arg)
+	}
+	return arg.ID, nil
 }
 
 // mockOrderRepo returns a fixed OrderTxRepo from WithTx (ignores tx).
@@ -155,6 +163,31 @@ func TestPlaceOrder_NotEnoughStock(t *testing.T) {
 	_, err := svc.PlaceOrder(context.Background(), createOrderParams{
 		CustomerID: 1,
 		Items:      []orderItem{{ProductID: 1, Quantity: 5}}, // ask for 5
+	})
+	if !errors.Is(err, ErrProductNoStock) {
+		t.Errorf("err = %v, want ErrProductNoStock", err)
+	}
+}
+
+func TestPlaceOrder_DecrementStockFails_RaceCondition(t *testing.T) {
+	txRepo := &mockOrderTxRepo{
+		createOrder: func(ctx context.Context, customerID int64) (repo.Order, error) {
+			return repo.Order{ID: 99, CustomerID: customerID}, nil
+		},
+		findProductByID: func(ctx context.Context, id int64) (repo.Product, error) {
+			return repo.Product{ID: id, Quantity: 10, PriceInCenters: 1000}, nil
+		},
+		createOrderItem: func(ctx context.Context, arg repo.CreateOrderItemParams) (repo.OrderItem, error) {
+			return repo.OrderItem{}, nil
+		},
+		decrementProductStock: func(ctx context.Context, arg repo.DecrementProductStockParams) (int64, error) {
+			return 0, errors.New("no rows") // race: another request took the stock
+		},
+	}
+	svc := NewService(&mockOrderRepo{txRepo: txRepo}, &mockTxBeginner{}, noopLogger)
+	_, err := svc.PlaceOrder(context.Background(), createOrderParams{
+		CustomerID: 1,
+		Items:      []orderItem{{ProductID: 1, Quantity: 5}},
 	})
 	if !errors.Is(err, ErrProductNoStock) {
 		t.Errorf("err = %v, want ErrProductNoStock", err)

@@ -1,4 +1,8 @@
 // JWT: sign and verify tokens. Claims include customer ID and email.
+//
+// LEARNING: JWT = JSON Web Token. It's a signed payload (claims) that the client sends in
+// Authorization: Bearer <token>. We verify the signature with our secret — if valid, we trust
+// the customer ID and email inside. No server-side session needed (stateless).
 package auth
 
 import (
