@@ -41,4 +41,4 @@ echo "    Test in Postman: Register (POST /v1/auth/register), Login (POST /v1/au
 echo "    Stop API: Ctrl+C. Stop DB: docker compose down (README: 'How to stop the API and the database')."
 echo "    (If 8080 in use: HTTP_ADDR=:8081 go run ./cmd, then use :8081 in Postman)"
 echo ""
-go run ./cmd
+CGO_ENABLED=0 go run -buildvcs=false ./cmd

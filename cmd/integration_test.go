@@ -72,8 +72,8 @@ func TestIntegration_Health(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("GET /health status = %d, want 200", rec.Code)
 	}
-	if body := strings.TrimSpace(rec.Body.String()); body != "all good" {
-		t.Errorf("GET /health body = %q, want \"all good\"", body)
+	if !strings.Contains(rec.Body.String(), `"status":"ok"`) {
+		t.Errorf("GET /health body = %q, want JSON with status ok", rec.Body.String())
 	}
 }
 

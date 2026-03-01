@@ -12,8 +12,8 @@ echo ""
 
 # 1. Health
 echo "1. GET /health"
-if ! curl -sf "$BASE/health" | grep -q "all good"; then
-  echo "   FAIL: expected 'all good'"
+if ! curl -sf "$BASE/health" | grep -q '"status":"ok"'; then
+  echo "   FAIL: expected JSON with status ok"
   exit 1
 fi
 echo "   OK"

@@ -37,7 +37,7 @@ go run ./cmd
 ./scripts/verify-api.sh
 ```
 
-Or manually: `curl http://localhost:8080/health` → should return `all good`.
+Or manually: `curl http://localhost:8080/health` → should return `{"status":"ok"}`.
 
 ---
 

@@ -54,9 +54,9 @@ func (app *application) mount() http.Handler {
 		}))
 	}
 
-	// Health: simple 200 for load balancers. /health/live pings the DB (503 if DB down).
+	// Health: JSON 200 for load balancers. /health/live pings the DB (503 if DB down).
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("all good"))
+		json.Write(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	r.Get("/health/live", app.healthLive)
 	r.Handle("/metrics", metrics.Handler())

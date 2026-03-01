@@ -10,7 +10,7 @@ It is intentionally simple and is a great project for someone who has **just sta
 
 The API currently supports:
 
-- **`GET /health`** – simple health check (body: "all good")
+- **`GET /health`** – simple health check (JSON: `{"status":"ok"}`)
 - **`GET /health/live`** – health + DB ping (returns 503 if DB is down)
 - **`POST /v1/auth/register`** – create customer (email, password, name)
 - **`POST /v1/auth/login`** – login and get JWT token
@@ -163,6 +163,7 @@ In simple words:
 | Command | Purpose |
 |---------|---------|
 | `go run ./cmd` | Build and run the API. Reads `.env`, listens on `:8080`. Stop with Ctrl+C. |
+| `CGO_ENABLED=0 go run -buildvcs=false ./cmd` | Same, but avoids Xcode/VCS errors on macOS. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#7-xcode-license-or-vcs-error-macos). |
 | `go test -v ./...` | Run all tests (unit + integration). Skips integration tests if DB is unavailable. |
 | `go test -v ./cmd/ -run Integration` | Run only integration tests (register, login, products, orders). |
 | `go build ./...` | Build all packages (no output binary; use to verify code compiles). |

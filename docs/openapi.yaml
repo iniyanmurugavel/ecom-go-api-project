@@ -17,8 +17,13 @@ paths:
         '200':
           description: OK
           content:
-            text/plain:
-              example: all good
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
 
   /health/live:
     get:

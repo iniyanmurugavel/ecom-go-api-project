@@ -20,8 +20,8 @@ curl http://localhost:8080/health
 
 ### Response (200 OK)
 
-```
-all good
+```json
+{"status":"ok"}
 ```
 
 ---
@@ -270,8 +270,10 @@ Use real `productId` values from **List Products**.
 
 **Verify all endpoints:** `./scripts/verify-api.sh` (API must be running)
 
+### Option A: Manual (copy token from login response)
+
 ```bash
-# 1. Health
+# 1. Health (returns {"status":"ok"})
 curl http://localhost:8080/health
 
 # 2. Register
@@ -284,7 +286,7 @@ curl -X POST http://localhost:8080/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"secret123"}'
 
-# 4. Products (replace TOKEN)
+# 4. Products (replace TOKEN with value from step 3)
 curl "http://localhost:8080/v1/products?limit=5" \
   -H "Authorization: Bearer TOKEN"
 
@@ -296,6 +298,24 @@ curl -X POST http://localhost:8080/v1/orders \
 
 # 6. Metrics (Prometheus)
 curl http://localhost:8080/metrics
+```
+
+### Option B: With jq (auto-extract token)
+
+```bash
+# Login and extract token (requires jq: brew install jq)
+TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"secret123"}' | jq -r '.token')
+
+# Get products (all responses are JSON)
+curl -s "http://localhost:8080/v1/products?limit=5" -H "Authorization: Bearer $TOKEN"
+
+# Place order
+curl -s -X POST http://localhost:8080/v1/orders \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"items":[{"productId":1,"quantity":1}]}'
 ```
 
 ---

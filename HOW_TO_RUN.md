@@ -76,7 +76,7 @@ time=... level=INFO msg="server started" addr=:8080
 ```bash
 # Health check
 curl http://localhost:8080/health
-# → all good
+# → {"status":"ok"}
 
 # Get products (requires token — register/login first)
 curl "http://localhost:8080/v1/products?limit=5" -H "Authorization: Bearer YOUR_TOKEN"
@@ -120,7 +120,7 @@ curl -X POST http://localhost:8080/v1/orders \
 Run these in a **new terminal** (with API running):
 
 ```bash
-# 1. Health (should return "all good")
+# 1. Health (should return {"status":"ok"})
 curl http://localhost:8080/health
 
 # 2. Register (creates customer)

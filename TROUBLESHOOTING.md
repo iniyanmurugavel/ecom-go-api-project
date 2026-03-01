@@ -35,7 +35,9 @@ This document summarizes the problems encountered while setting up and running t
 | 3 | Panic on DB connection failure | Code used `panic(err)` | Replaced with log + `os.Exit(1)` |
 | 4 | DB credentials “without username password” | Confusion about where credentials come from | Load `.env` and build DSN from env vars with defaults |
 | 5 | `.env` not applied when running app | Not loading `.env` or wrong working directory | Use `godotenv.Load(".env")` and run from project root |
-| 6 | Port 8080 “already in use” (during testing) | Another process was using 8080 on that machine | Use **8080** normally; use **8081** only if 8080 is busy on your machine |
+| 6 | Port 8080 "already in use" (during testing) | Another process was using 8080 on that machine | Use **8080** normally; use **8081** only if 8080 is busy on your machine |
+| 7 | Xcode license / VCS error | macOS: CGO or git needs Xcode | Use `CGO_ENABLED=0 go run -buildvcs=false ./cmd` — see [Section 7](#7-xcode-license-or-vcs-error-macos) |
+
 
 ---
 
@@ -179,6 +181,45 @@ Any DB connection error (wrong port, wrong password, Postgres down) caused a **p
   and use **http://localhost:8081** in Postman instead of 8080.
 
 So: **use 8080 normally; 8081 is only a fallback when 8080 is already in use.**
+
+---
+
+## 7. Xcode License or VCS Error (macOS)
+
+### What you saw
+
+```
+# runtime/cgo
+You have not agreed to the Xcode license agreements. Please run 'sudo xcodebuild -license'
+```
+
+or
+
+```
+error obtaining VCS status: exit status 69
+Use -buildvcs=false to disable VCS stamping.
+```
+
+### Why it happened
+
+- **CGO:** Go can call C code. On macOS, that uses Xcode tooling (clang). If the Xcode license isn't accepted, the build fails.
+- **VCS:** Go embeds git info (commit, dirty flag) in binaries. If git fails (e.g. due to Xcode license when running hooks), the build fails.
+
+### Fix
+
+Run with:
+
+```bash
+CGO_ENABLED=0 go run -buildvcs=false ./cmd
+```
+
+| Part | What it does |
+|------|--------------|
+| `CGO_ENABLED=0` | Disables CGO. No C code, no Xcode. This project uses pure-Go pgx, so CGO isn't needed. |
+| `-buildvcs=false` | Skips embedding git info. Avoids VCS-related build errors. |
+| `./cmd` | The package to build and run. |
+
+**Alternative:** Accept the Xcode license: `sudo xcodebuild -license`, then `go run ./cmd` works without these flags.
 
 ---
 
