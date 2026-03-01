@@ -18,6 +18,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"github.com/sikozonpc/ecom/internal/auth"
 	"github.com/sikozonpc/ecom/internal/env"
 )
 
@@ -34,9 +35,24 @@ func main() {
 	slog.SetDefault(logger)
 
 	ctx := context.Background()
+	appEnv := env.GetString("APP_ENV", "development")
 	jwtSecret := env.GetString("JWT_SECRET", "change-me-in-production-use-long-secret")
-	if len(jwtSecret) < 32 {
+	if appEnv == "production" && len(jwtSecret) < 32 {
+		logger.Error("JWT_SECRET must be at least 32 chars in production; set APP_ENV=development for dev")
+		os.Exit(1)
+	}
+	if appEnv != "production" && len(jwtSecret) < 32 {
 		logger.Warn("JWT_SECRET should be at least 32 chars for security; using default for dev")
+	}
+	jwtExpiryHours := env.GetInt("JWT_EXPIRY_HOURS", 24)
+	if jwtExpiryHours < 1 {
+		jwtExpiryHours = 24
+	}
+	jwtConfig := &auth.JWTConfig{
+		Secret:   []byte(jwtSecret),
+		Expiry:   time.Duration(jwtExpiryHours) * time.Hour,
+		Issuer:   env.GetString("JWT_ISSUER", "ecom-api"),
+		Audience: env.GetString("JWT_AUDIENCE", "ecom-api"),
 	}
 	// LEARNING: Parse CORS_ALLOWED_ORIGINS (comma-separated origins for browser requests).
 	// Empty = CORS disabled. Mobile apps don't need CORS (only browsers enforce it).
@@ -48,12 +64,14 @@ func main() {
 			}
 		}
 	}
+	requestTimeout := env.GetDuration("REQUEST_TIMEOUT", 60*time.Second)
 	cfg := config{
-		addr:        env.GetString("HTTP_ADDR", ":8080"),
-		db:          dbConfig{dsn: getDSN()},
-		rateLimit:   env.GetInt("RATE_LIMIT_REQUESTS_PER_MINUTE", 100), // 0 = disabled
-		jwtSecret:   []byte(jwtSecret),
-		corsOrigins: corsOrigins,
+		addr:           env.GetString("HTTP_ADDR", ":8080"),
+		db:             dbConfig{dsn: getDSN()},
+		rateLimit:      env.GetInt("RATE_LIMIT_REQUESTS_PER_MINUTE", 100), // 0 = disabled
+		jwtConfig:      jwtConfig,
+		corsOrigins:    corsOrigins,
+		requestTimeout: requestTimeout,
 	}
 
 	// Connection pool: many goroutines can use DB at once. Tune via DB_POOL_MAX_CONNS, DB_POOL_MIN_CONNS.
@@ -82,12 +100,15 @@ func main() {
 	app := application{config: cfg, pool: pool, logger: logger}
 	handler := app.mount()
 
+	readTimeout := env.GetDuration("HTTP_READ_TIMEOUT", 10*time.Second)
+	writeTimeout := env.GetDuration("HTTP_WRITE_TIMEOUT", 30*time.Second)
+	idleTimeout := env.GetDuration("HTTP_IDLE_TIMEOUT", time.Minute)
 	srv := &http.Server{
 		Addr:         cfg.addr,
 		Handler:      handler,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  time.Minute,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		IdleTimeout:  idleTimeout,
 	}
 
 	// Start server in a goroutine so we can wait for shutdown signal in main.
@@ -109,8 +130,9 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
+	shutdownTimeout := env.GetDuration("SHUTDOWN_TIMEOUT", 10*time.Second)
 	logger.Info("shutting down server...")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Error("server shutdown error", "error", err)

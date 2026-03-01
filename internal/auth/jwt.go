@@ -12,42 +12,58 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// Claims holds the JWT payload. jwt.RegisteredClaims adds exp, iat, etc.
+// Claims holds the JWT payload. jwt.RegisteredClaims adds exp, iat, iss, aud, etc.
 type Claims struct {
 	CustomerID int64  `json:"customer_id"`
 	Email      string `json:"email"`
 	jwt.RegisteredClaims
 }
 
-// DefaultExpiry is how long a token is valid (24 hours).
-const DefaultExpiry = 24 * time.Hour
+// JWTConfig holds JWT settings from env. Pass to SignToken and VerifyToken.
+type JWTConfig struct {
+	Secret   []byte
+	Expiry   time.Duration
+	Issuer   string
+	Audience string
+}
 
 var (
 	ErrInvalidToken = errors.New("invalid token")
 )
 
-// SignToken creates a JWT with the given customer ID and email. Uses secret for HMAC signing.
-func SignToken(secret []byte, customerID int64, email string) (string, error) {
+// SignToken creates a JWT with the given customer ID and email. Uses config for secret, expiry, iss, aud.
+func SignToken(cfg *JWTConfig, customerID int64, email string) (string, error) {
+	now := time.Now()
 	claims := Claims{
 		CustomerID: customerID,
 		Email:      email,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(DefaultExpiry)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(now.Add(cfg.Expiry)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			Issuer:    cfg.Issuer,
+			Audience:  jwt.ClaimStrings{cfg.Audience},
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(secret)
+	return token.SignedString(cfg.Secret)
 }
 
-// VerifyToken parses and validates the token. Returns claims or error.
-func VerifyToken(secret []byte, tokenString string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(t *jwt.Token) (interface{}, error) {
+// VerifyToken parses and validates the token. Validates iss and aud when set in config.
+func VerifyToken(cfg *JWTConfig, tokenString string) (*Claims, error) {
+	keyFunc := func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, ErrInvalidToken
 		}
-		return secret, nil
-	})
+		return cfg.Secret, nil
+	}
+	opts := []jwt.ParserOption{}
+	if cfg.Issuer != "" {
+		opts = append(opts, jwt.WithIssuer(cfg.Issuer))
+	}
+	if cfg.Audience != "" {
+		opts = append(opts, jwt.WithAudience(cfg.Audience))
+	}
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, keyFunc, opts...)
 	if err != nil {
 		return nil, err
 	}

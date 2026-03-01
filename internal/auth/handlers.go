@@ -26,17 +26,17 @@ type loginResponse struct {
 }
 
 type Handler struct {
-	svc    Service
-	secret []byte
-	logger interface {
+	svc       Service
+	jwtConfig *JWTConfig
+	logger    interface {
 		Error(msg string, args ...any)
 	}
 }
 
-func NewHandler(svc Service, secret []byte, logger interface {
+func NewHandler(svc Service, jwtConfig *JWTConfig, logger interface {
 	Error(msg string, args ...any)
 }) *Handler {
-	return &Handler{svc: svc, secret: secret, logger: logger}
+	return &Handler{svc: svc, jwtConfig: jwtConfig, logger: logger}
 }
 
 // Register handles POST /v1/auth/register
@@ -100,7 +100,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		json.WriteError(w, r, http.StatusInternalServerError, "login failed")
 		return
 	}
-	token, err := SignToken(h.secret, customerID, email)
+	token, err := SignToken(h.jwtConfig, customerID, email)
 	if err != nil {
 		h.logger.Error("auth sign token failed", "error", err)
 		json.WriteError(w, r, http.StatusInternalServerError, "login failed")

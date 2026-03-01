@@ -20,10 +20,26 @@ All learning docs and API reference for this project are in this folder. **Start
 
 | Doc | What it covers |
 |-----|-----------------|
+| **[../RUN_AND_TEST.md](../RUN_AND_TEST.md)** | How to run the API and run unit + integration tests. |
 | **[API_REFERENCE.md](API_REFERENCE.md)** | **All endpoints** — curl commands + expected responses. Single source of truth. |
 | **[POSTMAN_CLI.md](POSTMAN_CLI.md)** | Run Postman collection from terminal (Newman). |
 | **[API_DOCUMENTATION.md](API_DOCUMENTATION.md)** | OpenAPI/Swagger — view spec, generate clients. |
 | **[openapi.yaml](openapi.yaml)** | OpenAPI 3 spec for tooling (Swagger UI, code gen). |
+
+### Database & Migrations
+
+| Doc | What it covers |
+|-----|-----------------|
+| **[DATABASE_AND_TABLES_STRATEGY.md](DATABASE_AND_TABLES_STRATEGY.md)** | Table design, relationships, why we structured the DB this way. |
+| **[MIGRATION_EXAMPLE.md](MIGRATION_EXAMPLE.md)** | Step-by-step: add a column without data loss. |
+| **[ACID_EXPLAINED.md](ACID_EXPLAINED.md)** | ACID properties (Atomicity, Consistency, Isolation, Durability) with examples. |
+| **[REDIS_GUIDE.md](REDIS_GUIDE.md)** | Why Redis, when to use it (caching, rate limit, JWT blocklist), how to add it. |
+
+### Deployment
+
+| Doc | What it covers |
+|-----|-----------------|
+| **[NGINX_GUIDE.md](NGINX_GUIDE.md)** | Why nginx is needed, when to use it, example configs (HTTPS, reverse proxy). |
 
 ---
 

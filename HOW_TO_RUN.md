@@ -2,6 +2,8 @@
 
 Follow these steps in order. No prior setup needed if you have Docker and Go installed.
 
+**Run + tests in one place:** See [RUN_AND_TEST.md](RUN_AND_TEST.md) for run commands and integration test instructions.
+
 **New to Go?** See [docs/LEARNER_GUIDE.md](docs/LEARNER_GUIDE.md) for a learning path and diagrams.
 
 ---
@@ -106,6 +108,7 @@ curl -X POST http://localhost:8080/v1/orders \
 | Action        | Command                          |
 |---------------|-----------------------------------|
 | Run project   | `./scripts/setup-and-run.sh`      |
+| Verify API    | `./scripts/verify-api.sh` (API must be running) |
 | Stop API      | `Ctrl+C`                          |
 | Stop DB       | `docker compose down`             |
 | Health check  | `curl http://localhost:8080/health`|

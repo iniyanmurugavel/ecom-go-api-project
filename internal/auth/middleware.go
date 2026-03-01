@@ -14,7 +14,7 @@ import (
 
 // RequireAuth returns middleware that validates the JWT and adds customer ID to context.
 // Expects "Authorization: Bearer <token>". Returns 401 JSON if missing or invalid.
-func RequireAuth(secret []byte) func(http.Handler) http.Handler {
+func RequireAuth(cfg *JWTConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			auth := r.Header.Get("Authorization")
@@ -32,7 +32,7 @@ func RequireAuth(secret []byte) func(http.Handler) http.Handler {
 				json.WriteError(w, r, http.StatusUnauthorized, "missing token")
 				return
 			}
-			claims, err := VerifyToken(secret, tokenString)
+			claims, err := VerifyToken(cfg, tokenString)
 			if err != nil {
 				json.WriteError(w, r, http.StatusUnauthorized, "invalid or expired token")
 				return

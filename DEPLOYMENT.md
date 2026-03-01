@@ -166,5 +166,6 @@ GOOSE_DBSTRING=host=postgres port=5432 user=postgres password=STRONG_PASSWORD db
 ## 8. Related Docs
 
 - [DEVELOPMENT_AND_DEPLOYMENT.md](DEVELOPMENT_AND_DEPLOYMENT.md) — Dev setup, Docker basics
+- [docs/NGINX_GUIDE.md](docs/NGINX_GUIDE.md) — Why nginx, when to use it, example configs
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — Common issues
 - [.env.example](.env.example) — All config vars

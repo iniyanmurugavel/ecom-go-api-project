@@ -104,4 +104,5 @@ When you add or change endpoints:
 ## 6. Related Docs
 
 - [API_REFERENCE.md](API_REFERENCE.md) — All curl commands and responses
+- `scripts/verify-api.sh` — Automated verification of all 7 endpoints (run with API up)
 - [POSTMAN_CLI.md](POSTMAN_CLI.md) — Run Postman collection from CLI

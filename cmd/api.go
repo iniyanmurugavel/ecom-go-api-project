@@ -31,11 +31,12 @@ func (app *application) mount() http.Handler {
 
 	// Middleware runs on every request before your handler. Order matters.
 	// LEARNING: r.Use() adds middleware. Each middleware can wrap the next handler or short-circuit.
+	requestTimeout := app.config.requestTimeout
 	r.Use(middleware.RequestID)   // unique ID per request (logs, tracing)
 	r.Use(middleware.RealIP)      // client IP from X-Forwarded-For when behind a proxy
 	r.Use(middleware.Logger)      // log method, path, status, duration
 	r.Use(middleware.Recoverer)   // catch panics and return 500 instead of crashing
-	r.Use(middleware.Timeout(60 * time.Second)) // cancel long-running requests after 60s
+	r.Use(middleware.Timeout(requestTimeout)) // cancel long-running requests
 	r.Use(metrics.Middleware)     // Prometheus request count and duration
 
 	// Rate limit per IP (production). Set app.config.rateLimit to 0 to disable (e.g. tests).
@@ -64,7 +65,7 @@ func (app *application) mount() http.Handler {
 	r.Route("/v1", func(r chi.Router) {
 		// Auth: register and login (no token required).
 		authSvc := auth.NewService(auth.NewAuthRepo(repo.New(app.pool)))
-		authHandler := auth.NewHandler(authSvc, app.config.jwtSecret, app.logger)
+		authHandler := auth.NewHandler(authSvc, app.config.jwtConfig, app.logger)
 		r.Post("/auth/register", authHandler.Register)
 		r.Post("/auth/login", authHandler.Login)
 
@@ -72,7 +73,7 @@ func (app *application) mount() http.Handler {
 		// LEARNING: r.Group() creates a sub-router. All routes inside get the RequireAuth middleware.
 		// RequireAuth runs before the handler — it checks the JWT and puts customer ID in context.
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireAuth(app.config.jwtSecret))
+			r.Use(auth.RequireAuth(app.config.jwtConfig))
 			productRepo := repo.New(app.pool)
 			productSvc := products.NewService(productRepo, app.logger)
 			productHandler := products.NewHandler(productSvc, app.logger)
@@ -105,11 +106,12 @@ type application struct {
 }
 
 type config struct {
-	addr        string
-	db          dbConfig
-	rateLimit   int      // requests per minute per IP; 0 = disabled
-	jwtSecret   []byte   // for signing/verifying JWTs
-	corsOrigins []string // CORS allowed origins; empty = CORS disabled
+	addr            string
+	db              dbConfig
+	rateLimit       int               // requests per minute per IP; 0 = disabled
+	jwtConfig       *auth.JWTConfig   // JWT secret, expiry, issuer, audience
+	corsOrigins     []string          // CORS allowed origins; empty = CORS disabled
+	requestTimeout  time.Duration    // max time per request (middleware)
 }
 
 type dbConfig struct {

@@ -12,9 +12,11 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"github.com/sikozonpc/ecom/internal/auth"
 )
 
 func init() {
@@ -41,9 +43,15 @@ func testApp(t *testing.T) *application {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	return &application{
 		config: config{
-			addr:      ":8080",
-			db:        dbConfig{dsn: dsn},
-			jwtSecret: []byte("test-secret-at-least-32-characters-long"),
+			addr:            ":8080",
+			db:              dbConfig{dsn: dsn},
+			jwtConfig: &auth.JWTConfig{
+				Secret:   []byte("test-secret-at-least-32-characters-long"),
+				Expiry:   24 * time.Hour,
+				Issuer:   "ecom-api",
+				Audience: "ecom-api",
+			},
+			requestTimeout: 60 * time.Second,
 		},
 		pool:   pool,
 		logger: logger,

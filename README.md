@@ -25,9 +25,11 @@ For **API reference** (all curl + responses in one place) — see **[docs/API_RE
 
 For a **high-level design** of how the API works (request flow: API → handler → service → SQLC → PostgreSQL, Docker, and what to do when you make changes or want hot reload), see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
-For **development vs deployment** (use Docker or your own DB in dev? deploy in Docker later?), **Docker basics**, and a **command reference**, see **[DEVELOPMENT_AND_DEPLOYMENT.md](DEVELOPMENT_AND_DEPLOYMENT.md)**. For **production deployment** (where to deploy, with/without Docker, local full-Docker), see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+For **how to run and test** (run API, unit tests, integration tests), see **[RUN_AND_TEST.md](RUN_AND_TEST.md)**. For **development vs deployment** (use Docker or your own DB in dev? deploy in Docker later?), **Docker basics**, and a **command reference**, see **[DEVELOPMENT_AND_DEPLOYMENT.md](DEVELOPMENT_AND_DEPLOYMENT.md)**. For **production deployment** (where to deploy, with/without Docker, local full-Docker), see **[DEPLOYMENT.md](DEPLOYMENT.md)**. For **why and how to use nginx** (HTTPS, reverse proxy), see **[docs/NGINX_GUIDE.md](docs/NGINX_GUIDE.md)**.
 
 **If you are new to Go:** Start with **[docs/LEARNING_PATH.md](docs/LEARNING_PATH.md)** — a stack-ranked order to learn the project step by step. See [docs/CORS_AND_CLIENTS.md](docs/CORS_AND_CLIENTS.md) for CORS (web vs mobile) with examples. The code has **LEARNING:** comments for beginners.
+
+**Database & learning:** [docs/DATABASE_AND_TABLES_STRATEGY.md](docs/DATABASE_AND_TABLES_STRATEGY.md) (table design), [docs/MIGRATION_EXAMPLE.md](docs/MIGRATION_EXAMPLE.md) (add column without data loss), [docs/ACID_EXPLAINED.md](docs/ACID_EXPLAINED.md) (ACID properties), [docs/REDIS_GUIDE.md](docs/REDIS_GUIDE.md) (why and when to use Redis).
 
 **If something is unclear:** The code has short comments (e.g. in `cmd/api.go` for middleware, `cmd/main.go` for startup). Use the links above for request flow, migrations, and running the project.
 
@@ -172,6 +174,7 @@ In simple words:
 | `docker compose down` | Stop PostgreSQL. Data in the volume is kept. |
 | `docker compose down -v` | Stop PostgreSQL and delete all data (fresh DB next time). |
 | `./scripts/setup-and-run.sh` | One-shot: start DB, run migrations, seed products, start API. |
+| `./scripts/verify-api.sh` | Verify all 7 endpoints (API must be running). |
 
 **Note:** Use `go run ./cmd` (not `go run cmd/*.go`) to avoid running the integration test file. Use `go test` (not `go run`) for `*_test.go` files.
 

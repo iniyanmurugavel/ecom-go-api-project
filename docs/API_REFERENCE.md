@@ -268,6 +268,8 @@ Use real `productId` values from **List Products**.
 
 ## 8. Quick Copy-Paste Flow
 
+**Verify all endpoints:** `./scripts/verify-api.sh` (API must be running)
+
 ```bash
 # 1. Health
 curl http://localhost:8080/health
@@ -291,6 +293,9 @@ curl -X POST http://localhost:8080/v1/orders \
   -H "Authorization: Bearer TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"items":[{"productId":1,"quantity":1}]}'
+
+# 6. Metrics (Prometheus)
+curl http://localhost:8080/metrics
 ```
 
 ---
