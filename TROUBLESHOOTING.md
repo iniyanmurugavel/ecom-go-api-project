@@ -264,6 +264,53 @@ So: this project has **one database** — the one in Docker (port 15432). Your M
 
 ---
 
+## Docker Volumes: Why Data Persists and How to Clear It
+
+### Why data doesn't disappear when you stop Postgres
+
+Docker uses **volumes** to store data outside the container. In `docker-compose.yaml`:
+
+```yaml
+volumes:
+  - postgres-data:/var/lib/postgresql/data
+```
+
+This maps a named volume `postgres-data` to the folder where Postgres stores its data. When you run `docker compose down`:
+
+- The **container** is stopped and removed
+- The **volume** is **kept** — your data (tables, rows) stays on disk
+
+So the next time you run `docker compose up -d`, Postgres starts with the **same data** as before.
+
+### How to clear all data completely
+
+Use the `-v` flag to remove volumes:
+
+```bash
+docker compose down -v
+```
+
+| Command | What happens |
+|---------|--------------|
+| `docker compose down` | Stops and removes the container. **Volume kept** — data persists. |
+| `docker compose down -v` | Stops the container and **removes the volume** — all DB data is deleted. |
+
+### After clearing data
+
+1. Run `docker compose up -d` to start Postgres again
+2. Run `goose up` to apply migrations (creates empty tables)
+3. Re-seed products if needed — `./scripts/setup-and-run.sh` does this for you
+
+### When to use each
+
+| Goal | Command |
+|------|---------|
+| Stop for the day, keep your data | `docker compose down` |
+| Fresh start, wipe everything | `docker compose down -v` |
+| Reset and run again | `docker compose down -v` then `./scripts/setup-and-run.sh` |
+
+---
+
 ## Connection test failing when I use port 15432
 
 If your DB client (TablePlus, DBeaver, pgAdmin, etc.) or an app “connection test” fails when you use port **15432**, check the following.
@@ -305,5 +352,10 @@ Once the connection test passes with **port 15432** and **SSL off**, you’re ta
 | **15432** | PostgreSQL (Docker) on the host. App and Goose must use this so they hit the project’s DB. |
 | **8080**  | Default HTTP port for this API. Use this in Postman. |
 | **8081**  | Use only if 8080 is already in use; then set `HTTP_ADDR=:8081` and use `http://localhost:8081` in Postman. |
+
+| Command | Effect |
+|---------|--------|
+| `docker compose down` | Stop Postgres. **Data kept** (volume persists). |
+| `docker compose down -v` | Stop Postgres and **delete all data** (removes volume). |
 
 This file is for your own reference to remember what went wrong and how to make the project run successfully.

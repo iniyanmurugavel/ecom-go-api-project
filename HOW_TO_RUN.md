@@ -99,7 +99,8 @@ curl -X POST http://localhost:8080/v1/orders \
 ## Step 6: Stop the Project
 
 - **Stop API:** Press `Ctrl+C` in the terminal where it's running
-- **Stop DB:** `docker compose down` (from project folder)
+- **Stop DB:** `docker compose down` (from project folder; keeps data)
+- **Stop DB and clear all data:** `docker compose down -v` — see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#docker-volumes-why-data-persists-and-how-to-clear-it) for why data persists
 
 ---
 
@@ -110,7 +111,8 @@ curl -X POST http://localhost:8080/v1/orders \
 | Run project   | `./scripts/setup-and-run.sh`      |
 | Verify API    | `./scripts/verify-api.sh` (API must be running) |
 | Stop API      | `Ctrl+C`                          |
-| Stop DB       | `docker compose down`             |
+| Stop DB       | `docker compose down` (keeps data) |
+| Clear all DB data | `docker compose down -v` — see [TROUBLESHOOTING](TROUBLESHOOTING.md#docker-volumes-why-data-persists-and-how-to-clear-it) |
 | Health check  | `curl http://localhost:8080/health`|
 
 ---
