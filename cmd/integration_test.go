@@ -93,6 +93,25 @@ func TestIntegration_HealthLive(t *testing.T) {
 	}
 }
 
+func TestIntegration_Metrics(t *testing.T) {
+	app := testApp(t)
+	if app == nil {
+		return
+	}
+	h := app.mount()
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("GET /metrics status = %d, want 200", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "go_") {
+		t.Error("GET /metrics should return Prometheus metrics")
+	}
+}
+
 func TestIntegration_GetProducts_NoToken(t *testing.T) {
 	app := testApp(t)
 	if app == nil {

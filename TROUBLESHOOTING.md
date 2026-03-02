@@ -219,6 +219,8 @@ CGO_ENABLED=0 go run -buildvcs=false ./cmd
 | `-buildvcs=false` | Skips embedding git info. Avoids VCS-related build errors. |
 | `./cmd` | The package to build and run. |
 
+**Note:** `CGO_ENABLED` and `-buildvcs` are **independent** — they control different things (C code vs. git/VCS). They don't mean the same; we use both because on macOS both can fail without an accepted Xcode license.
+
 **Alternative:** Accept the Xcode license: `sudo xcodebuild -license`, then `go run ./cmd` works without these flags.
 
 ---
