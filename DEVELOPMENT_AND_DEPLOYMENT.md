@@ -11,7 +11,7 @@ This file answers: **Should I use Docker or my own DB in development?** and **Do
 | What | Where it runs in development |
 |------|------------------------------|
 | **PostgreSQL (database)** | Inside **Docker** (container `ecom-postgres`). You start it with `docker compose up -d`. |
-| **Your Go API** | On **your machine** (not in Docker). You run `go run cmd/*.go` in the terminal. |
+| **Your Go API** | On **your machine** (not in Docker). You run `go run ./cmd` in the terminal. |
 
 So in dev:
 
@@ -25,9 +25,9 @@ You **do not** need to install PostgreSQL on your Mac for this project. Docker g
 Yes. If you already have Postgres (e.g. Postgres.app, Homebrew) and want to use it:
 
 1. Create a database named `ecom` and a user `postgres` with password `postgres` (or whatever you prefer).
-2. In `.env`, set `GOOSE_DBSTRING` (and optionally `DB_*`) to point to **your** Postgres (usually `port=5432`).
+2. In `.env`, set `GOOSE_DBSTRING` (and optionally `DB_*`) to point to **your** Postgres Use port 15432. To make Mac Postgres use 15432, see **[docs/MAC_POSTGRES_15432.md](docs/MAC_POSTGRES_15432.md)**.
 3. Run migrations: `goose up`.
-4. Run the API: `go run cmd/*.go`.
+4. Run the API: `go run ./cmd`.
 
 The app doesn’t care whether the DB is in Docker or on your host; it only cares about the connection string in `.env`. Using Docker is recommended so everyone has the same setup and you avoid “works on my machine” issues.
 
@@ -46,13 +46,14 @@ The app doesn’t care whether the DB is in Docker or on your host; it only care
 
 **If your local DB is Postgres on your Mac (e.g. Postgres.app):**
 
-1. Create database `ecom` and user (e.g. postgres/postgres). Mac Postgres is usually **port 5432**.
-2. In `.env`: `GOOSE_DBSTRING="host=localhost port=5432 user=postgres password=postgres dbname=ecom sslmode=disable"`
-3. Apply migrations: `source .env` then `goose up`
-4. Run API: `go run cmd/*.go` — app uses the same `.env`, so it talks to your Mac Postgres.
-5. See data: DB client → **localhost, port 5432**, database **ecom**.
+1. Configure Mac Postgres to use port **15432** (see "Make Mac Postgres use port 15432" above).
+2. Create database `ecom` and user `postgres` with password `postgres`.
+3. In `.env`: `GOOSE_DBSTRING="host=localhost port=15432 user=postgres password=postgres dbname=ecom sslmode=disable"`
+4. Apply migrations: `source .env` then `goose up`
+5. Run API: `go run ./cmd` — app uses the same `.env`, so it talks to your Mac Postgres.
+6. See data: DB client → **localhost, port 15432**, database **ecom**.
 
-**Summary:** Set the DB you want in `.env` (port **15432** = Docker, **5432** = typical Mac Postgres). Then run `goose up`. That DB is your local DB; schema and data reflect there.
+**Summary:** Use port **15432** for both Docker and Mac Postgres. Then run `goose up`. That DB is your local DB; schema and data reflect there.
 
 ### TablePlus (or any DB client) and Docker: same DB
 
@@ -93,7 +94,7 @@ Right now this repo only defines a **Postgres** container. To “deploy the API 
 
 ### Summary
 
-- **Development:** Use **Docker for the DB** (recommended); run the **API on your machine** with `go run cmd/*.go`.  
+- **Development:** Use **Docker for the DB** (recommended); run the **API on your machine** with `go run ./cmd`.  
 - **Later / production:** You can deploy **only the DB** in Docker, or **both API and DB** in Docker; the app just needs the right connection string (host/port) for where Postgres is running.
 
 ---
@@ -136,7 +137,12 @@ Run these from the **project root** (`ecom-go-api-project`).
 
 | Command | What it does |
 |--------|----------------|
-| `go run cmd/*.go` | Build and run the API. It reads `.env` and connects to Postgres (port 15432). Stop with Ctrl+C. |
+| `go run ./cmd` | Build and run the API. It reads `.env` and connects to Postgres (port 15432). Stop with Ctrl+C. |
+| `go test -v ./...` | Run all tests. Integration tests skip if DB is unavailable. |
+| `go test -v ./cmd/ -run Integration` | Run only integration tests (auth, products, orders). Use `go test`, not `go run`, for `*_test.go` files. |
+| `go build ./...` | Verify all packages compile (no binary produced). |
+| `go build -o api ./cmd/` | Build the API binary as `./api` (for deployment). |
+| `sqlc generate` | Regenerate Go code from SQL. Run after changing `queries.sql` or schema. |
 | `cp .env.example .env` | Create `.env` from the template (do once). |
 | `source .env` then `goose up` | Run DB migrations (or use `./scripts/setup-and-run.sh` which does this for you). |
 
@@ -160,7 +166,7 @@ Run these from the **project root** (`ecom-go-api-project`).
    `source .env` (or export `GOOSE_DBSTRING`), then `goose up`
 
 4. **Start the API:**  
-   `go run cmd/*.go`
+   `go run ./cmd`
 
 5. **Test:**  
    Open Postman, hit `http://localhost:8080/health`, `http://localhost:8080/products`, `http://localhost:8080/orders`.
@@ -177,7 +183,7 @@ Run these from the **project root** (`ecom-go-api-project`).
   - See [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 - **I don’t see data in my DB client**  
-  - Connect to **port 15432** (not 5432). See [MIGRATIONS_README.md](MIGRATIONS_README.md) section 7.
+  - Connect to **port 15432**. See [MIGRATIONS_README.md](MIGRATIONS_README.md) section 7.
 
 - **Migrations / schema**  
   - [MIGRATIONS_README.md](MIGRATIONS_README.md) – what migrations do, what happens to data when you change tables.
@@ -195,7 +201,7 @@ Run these from the **project root** (`ecom-go-api-project`).
 | | Development (now) | Later (deploy in Docker) |
 |-|-------------------|---------------------------|
 | **Database** | Docker (this repo’s `docker-compose`) | Same image in Docker, or a managed DB (e.g. cloud). |
-| **API** | On your machine (`go run cmd/*.go`) | Can run in a container too (add a service in `docker-compose` or use a Dockerfile). |
+| **API** | On your machine (`go run ./cmd`) | Can run in a container too (add a service in `docker-compose` or use a Dockerfile). |
 | **Connection string** | `.env`: `localhost:15432` for Docker DB | In production, host might be `postgres` (service name) and port `5432` inside the Docker network. |
 
 You’re not missing anything for **development**: use Docker for the DB, run the API on your machine, and use the commands above. When you’re ready to put the API in Docker as well, you’ll add a second service and point the API’s DSN to that Postgres service name and port.

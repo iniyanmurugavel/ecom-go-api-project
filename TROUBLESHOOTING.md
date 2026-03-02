@@ -2,18 +2,42 @@
 
 This document summarizes the problems encountered while setting up and running this e-commerce API project, and how each was fixed. Use it as a reference when something goes wrong or when you want to understand why things are configured the way they are.
 
+**New to Go?** See [docs/LEARNER_GUIDE.md](docs/LEARNER_GUIDE.md) for concepts and study path.
+
+---
+
+## Quick Reference: Ports and Connections
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Your machine                                                                │
+│                                                                              │
+│  API (go run ./cmd)          Docker Postgres                                 │
+│  listens on :8080            listens on host port 15432                      │
+│       │                              ▲                                        │
+│       │                              │                                        │
+│       │  connects via DSN            │  docker compose maps                   │
+│       │  host=localhost port=15432   │  15432 (host) → 5432 (container)       │
+│       └─────────────────────────────┘                                        │
+│                                                                              │
+│  Mac Postgres (if installed) often uses 5432 — we use 15432 to avoid clash.  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## Summary of Issues
 
 | # | Issue | Cause | Fix |
 |---|--------|--------|-----|
-| 1 | `role "postgres" does not exist` | App was connecting to port **5432** (another Postgres), not Docker | Use port **15432** for Docker Postgres |
-| 2 | App connecting to wrong port (5432) | DSN had no port or had `port=5432`; another Postgres was on 5432 | Force port 15432 in code and in `.env` |
+| 1 | `role "postgres" does not exist` | Connected to Mac Postgres (5432) instead of Docker (15432) | Use **port 15432** in `.env` and DB client for Docker Postgres |
+| 2 | App connecting to wrong port | DSN had wrong port or `.env` not loaded | Check `.env` has `port=15432`; run from project root |
 | 3 | Panic on DB connection failure | Code used `panic(err)` | Replaced with log + `os.Exit(1)` |
 | 4 | DB credentials “without username password” | Confusion about where credentials come from | Load `.env` and build DSN from env vars with defaults |
 | 5 | `.env` not applied when running app | Not loading `.env` or wrong working directory | Use `godotenv.Load(".env")` and run from project root |
-| 6 | Port 8080 “already in use” (during testing) | Another process was using 8080 on that machine | Use **8080** normally; use **8081** only if 8080 is busy on your machine |
+| 6 | Port 8080 "already in use" (during testing) | Another process was using 8080 on that machine | Use **8080** normally; use **8081** only if 8080 is busy on your machine |
+| 7 | Xcode license / VCS error | macOS: CGO or git needs Xcode | Use `CGO_ENABLED=0 go run -buildvcs=false ./cmd` — see [Section 7](#7-xcode-license-or-vcs-error-macos) |
+
 
 ---
 
@@ -29,7 +53,7 @@ panic: failed to connect to `user=postgres database=ecom`:
 
 ### Why it happened
 
-- The app was connecting to **port 5432** (PostgreSQL default).
+- The app was connecting to **port 5432** (Mac Postgres), not Docker on 15432.
 - On your Mac, **another** PostgreSQL was already using 5432 (e.g. Postgres.app, Homebrew Postgres, or another Docker container).
 - That other instance either:
   - Was not created with a user named `postgres`, or  
@@ -46,16 +70,15 @@ So the app was talking to the **wrong** database.
 
 - In `docker-compose.yaml`: map container 5432 to host **15432**.
 - In `.env`: set `GOOSE_DBSTRING=... port=15432 ...`.
-- In `cmd/main.go`: default DSN uses `port=15432`, and if `GOOSE_DBSTRING` has `port=5432` or no port, we replace/add `port=15432` so the app always talks to Docker Postgres.
 
 **What you should do:**
 
 - Run the app from the **project root** so `.env` is loaded.
-- Do **not** set `GOOSE_DBSTRING` in your shell to a DSN with `port=5432` (or with no port, on a machine where 5432 is another Postgres).
+- Port 15432 avoids conflict with Mac Postgres on 5432.
 
 ---
 
-## 2. App still connecting to port 5432
+## 2. App still connecting to wrong port
 
 ### What you saw
 
@@ -69,13 +92,8 @@ Error message still showed `:5432` in the connection error (e.g. `127.0.0.1:5432
 ### Fix
 
 - **Run from project root:**  
-  `cd /Users/iniyan/Documents/Backend/ecom-go-api-project` then `go run cmd/*.go`.
+  `cd /Users/iniyan/Documents/Backend/ecom-go-api-project` then `go run ./cmd`.
 - **Load `.env`:** The app calls `godotenv.Load(".env")` so variables from `.env` (with `port=15432`) are used.
-- **Code-level safeguard:** In `getDSN()` we now:
-  - If `GOOSE_DBSTRING` has no `port=`, we add `port=15432`.
-  - If it has `port=5432`, we replace it with `port=15432`.
-
-So even with an old or shell-set DSN, the app will use 15432 and connect to Docker.
 
 ---
 
@@ -134,7 +152,7 @@ Any DB connection error (wrong port, wrong password, Postgres down) caused a **p
 
 - Call `godotenv.Load(".env")` at the start of `main()`.
 - **Always run the app from the project root:**  
-  `cd /Users/iniyan/Documents/Backend/ecom-go-api-project` then `go run cmd/*.go` (or `./scripts/setup-and-run.sh`).
+  `cd /Users/iniyan/Documents/Backend/ecom-go-api-project` then `go run ./cmd` (or `./scripts/setup-and-run.sh`).
 
 ---
 
@@ -158,11 +176,52 @@ Any DB connection error (wrong port, wrong password, Postgres down) caused a **p
   ```
 - Then run:
   ```bash
-  HTTP_ADDR=:8081 go run cmd/*.go
+  HTTP_ADDR=:8081 go run ./cmd
   ```
   and use **http://localhost:8081** in Postman instead of 8080.
 
 So: **use 8080 normally; 8081 is only a fallback when 8080 is already in use.**
+
+---
+
+## 7. Xcode License or VCS Error (macOS)
+
+### What you saw
+
+```
+# runtime/cgo
+You have not agreed to the Xcode license agreements. Please run 'sudo xcodebuild -license'
+```
+
+or
+
+```
+error obtaining VCS status: exit status 69
+Use -buildvcs=false to disable VCS stamping.
+```
+
+### Why it happened
+
+- **CGO:** Go can call C code. On macOS, that uses Xcode tooling (clang). If the Xcode license isn't accepted, the build fails.
+- **VCS:** Go embeds git info (commit, dirty flag) in binaries. If git fails (e.g. due to Xcode license when running hooks), the build fails.
+
+### Fix
+
+Run with:
+
+```bash
+CGO_ENABLED=0 go run -buildvcs=false ./cmd
+```
+
+| Part | What it does |
+|------|--------------|
+| `CGO_ENABLED=0` | Disables CGO. No C code, no Xcode. This project uses pure-Go pgx, so CGO isn't needed. |
+| `-buildvcs=false` | Skips embedding git info. Avoids VCS-related build errors. |
+| `./cmd` | The package to build and run. |
+
+**Note:** `CGO_ENABLED` and `-buildvcs` are **independent** — they control different things (C code vs. git/VCS). They don't mean the same; we use both because on macOS both can fail without an accepted Xcode license.
+
+**Alternative:** Accept the Xcode license: `sudo xcodebuild -license`, then `go run ./cmd` works without these flags.
 
 ---
 
@@ -182,7 +241,7 @@ So: **use 8080 normally; 8081 is only a fallback when 8080 is already in use.**
    goose up
    ```
 5. **Start the API:**  
-   `go run cmd/*.go`  
+   `go run ./cmd`  
    You should see something like:  
    `level=INFO msg="connected to database" host=localhost port=15432 db=ecom`  
    `server has started at addr :8080`
@@ -207,6 +266,53 @@ So: this project has **one database** — the one in Docker (port 15432). Your M
 
 ---
 
+## Docker Volumes: Why Data Persists and How to Clear It
+
+### Why data doesn't disappear when you stop Postgres
+
+Docker uses **volumes** to store data outside the container. In `docker-compose.yaml`:
+
+```yaml
+volumes:
+  - postgres-data:/var/lib/postgresql/data
+```
+
+This maps a named volume `postgres-data` to the folder where Postgres stores its data. When you run `docker compose down`:
+
+- The **container** is stopped and removed
+- The **volume** is **kept** — your data (tables, rows) stays on disk
+
+So the next time you run `docker compose up -d`, Postgres starts with the **same data** as before.
+
+### How to clear all data completely
+
+Use the `-v` flag to remove volumes:
+
+```bash
+docker compose down -v
+```
+
+| Command | What happens |
+|---------|--------------|
+| `docker compose down` | Stops and removes the container. **Volume kept** — data persists. |
+| `docker compose down -v` | Stops the container and **removes the volume** — all DB data is deleted. |
+
+### After clearing data
+
+1. Run `docker compose up -d` to start Postgres again
+2. Run `goose up` to apply migrations (creates empty tables)
+3. Re-seed products if needed — `./scripts/setup-and-run.sh` does this for you
+
+### When to use each
+
+| Goal | Command |
+|------|---------|
+| Stop for the day, keep your data | `docker compose down` |
+| Fresh start, wipe everything | `docker compose down -v` |
+| Reset and run again | `docker compose down -v` then `./scripts/setup-and-run.sh` |
+
+---
+
 ## Connection test failing when I use port 15432
 
 If your DB client (TablePlus, DBeaver, pgAdmin, etc.) or an app “connection test” fails when you use port **15432**, check the following.
@@ -227,7 +333,7 @@ If your DB client (TablePlus, DBeaver, pgAdmin, etc.) or an app “connection te
    |----------|--------|----------|----------|----------|------|
    | localhost | 15432 | ecom     | postgres | postgres | off  |
 
-   Use **port 15432**, not 5432. Turn **SSL/TLS** off; the project uses `sslmode=disable`. Some clients fail if they insist on SSL.
+   Turn **SSL/TLS** off; the project uses `sslmode=disable`. Some clients fail if they insist on SSL.
 
 3. **Test from the terminal (bypasses the client):**
    ```bash
@@ -246,8 +352,12 @@ Once the connection test passes with **port 15432** and **SSL off**, you’re ta
 | Port  | Use |
 |-------|------|
 | **15432** | PostgreSQL (Docker) on the host. App and Goose must use this so they hit the project’s DB. |
-| **5432**  | Default Postgres port; often used by another instance on the Mac. Do **not** use this for this project. |
 | **8080**  | Default HTTP port for this API. Use this in Postman. |
 | **8081**  | Use only if 8080 is already in use; then set `HTTP_ADDR=:8081` and use `http://localhost:8081` in Postman. |
+
+| Command | Effect |
+|---------|--------|
+| `docker compose down` | Stop Postgres. **Data kept** (volume persists). |
+| `docker compose down -v` | Stop Postgres and **delete all data** (removes volume). |
 
 This file is for your own reference to remember what went wrong and how to make the project run successfully.

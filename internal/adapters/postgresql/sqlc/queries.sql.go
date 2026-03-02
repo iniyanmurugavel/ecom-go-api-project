@@ -7,7 +7,39 @@ package repo
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const createCustomer = `-- name: CreateCustomer :one
+INSERT INTO customers (email, password_hash, name)
+VALUES ($1, $2, $3) RETURNING id, email, name, created_at
+`
+
+type CreateCustomerParams struct {
+	Email        string `json:"email"`
+	PasswordHash string `json:"password_hash"`
+	Name         string `json:"name"`
+}
+
+type CreateCustomerRow struct {
+	ID        int64              `json:"id"`
+	Email     string             `json:"email"`
+	Name      string             `json:"name"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) (CreateCustomerRow, error) {
+	row := q.db.QueryRow(ctx, createCustomer, arg.Email, arg.PasswordHash, arg.Name)
+	var i CreateCustomerRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.CreatedAt,
+	)
+	return i, err
+}
 
 const createOrder = `-- name: CreateOrder :one
 INSERT INTO orders (
@@ -52,6 +84,41 @@ func (q *Queries) CreateOrderItem(ctx context.Context, arg CreateOrderItemParams
 	return i, err
 }
 
+const decrementProductStock = `-- name: DecrementProductStock :one
+UPDATE products SET quantity = quantity - $1 WHERE id = $2 AND quantity >= $1 RETURNING id
+`
+
+type DecrementProductStockParams struct {
+	Quantity int32 `json:"quantity"`
+	ID       int64 `json:"id"`
+}
+
+func (q *Queries) DecrementProductStock(ctx context.Context, arg DecrementProductStockParams) (int64, error) {
+	row := q.db.QueryRow(ctx, decrementProductStock, arg.Quantity, arg.ID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const findCustomerByEmail = `-- name: FindCustomerByEmail :one
+SELECT id, email, password_hash, name, created_at
+FROM customers
+WHERE email = $1
+`
+
+func (q *Queries) FindCustomerByEmail(ctx context.Context, email string) (Customer, error) {
+	row := q.db.QueryRow(ctx, findCustomerByEmail, email)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Name,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const findProductByID = `-- name: FindProductByID :one
 SELECT
   id, name, price_in_centers, quantity, created_at
@@ -83,6 +150,41 @@ FROM
 
 func (q *Queries) ListProducts(ctx context.Context) ([]Product, error) {
 	rows, err := q.db.Query(ctx, listProducts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.PriceInCenters,
+			&i.Quantity,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProductsPaginated = `-- name: ListProductsPaginated :many
+SELECT id, name, price_in_centers, quantity, created_at FROM products ORDER BY id LIMIT $1 OFFSET $2
+`
+
+type ListProductsPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+func (q *Queries) ListProductsPaginated(ctx context.Context, arg ListProductsPaginatedParams) ([]Product, error) {
+	rows, err := q.db.Query(ctx, listProductsPaginated, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

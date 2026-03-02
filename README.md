@@ -10,17 +10,34 @@ It is intentionally simple and is a great project for someone who has **just sta
 
 The API currently supports:
 
-- **`GET /health`** – simple health check
-- **`GET /products`** – list all products
-- **`POST /orders`** – create an order for existing products
+- **`GET /health`** – simple health check (JSON: `{"status":"ok"}`)
+- **`GET /health/live`** – health + DB ping (returns 503 if DB is down)
+- **`POST /v1/auth/register`** – create customer (email, password, name)
+- **`POST /v1/auth/login`** – login and get JWT token
+- **`GET /v1/products`** – list products (requires `Authorization: Bearer <token>`)
+- **`POST /v1/orders`** – create order (requires JWT; customer ID from token, body has `items` only)
 
 If you run into connection errors or “role postgres does not exist”, see **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** for a summary of common issues and how to fix them.
 
+For **authentication (JWT)** — how to register, login, and use the token in Postman — see **[AUTH_README.md](AUTH_README.md)**.
+
+For **API reference** (all curl + responses in one place) — see **[docs/API_REFERENCE.md](docs/API_REFERENCE.md)**. For **Postman CLI (Newman)** — see **[docs/POSTMAN_CLI.md](docs/POSTMAN_CLI.md)**. For Postman Desktop setup — see **[POSTMAN_GUIDE.md](POSTMAN_GUIDE.md)**.
+
 For a **high-level design** of how the API works (request flow: API → handler → service → SQLC → PostgreSQL, Docker, and what to do when you make changes or want hot reload), see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
-For **development vs deployment** (use Docker or your own DB in dev? deploy in Docker later?), **Docker basics**, and a **command reference**, see **[DEVELOPMENT_AND_DEPLOYMENT.md](DEVELOPMENT_AND_DEPLOYMENT.md)**.
+For **how to run and test** (run API, unit tests, integration tests), see **[RUN_AND_TEST.md](RUN_AND_TEST.md)**. For **development vs deployment** (use Docker or your own DB in dev? deploy in Docker later?), **Docker basics**, and a **command reference**, see **[DEVELOPMENT_AND_DEPLOYMENT.md](DEVELOPMENT_AND_DEPLOYMENT.md)**. For **production deployment** (where to deploy, with/without Docker, local full-Docker), see **[DEPLOYMENT.md](DEPLOYMENT.md)**. For **why and how to use nginx** (HTTPS, reverse proxy), see **[docs/NGINX_GUIDE.md](docs/NGINX_GUIDE.md)**.
+
+**If you are new to Go:** Start with **[docs/LEARNING_PATH.md](docs/LEARNING_PATH.md)** — a stack-ranked order to learn the project step by step. See [docs/CORS_AND_CLIENTS.md](docs/CORS_AND_CLIENTS.md) for CORS (web vs mobile) with examples. The code has **LEARNING:** comments for beginners.
+
+**Database & learning:** [docs/DATABASE_AND_TABLES_STRATEGY.md](docs/DATABASE_AND_TABLES_STRATEGY.md) (table design), [docs/MIGRATION_EXAMPLE.md](docs/MIGRATION_EXAMPLE.md) (add column without data loss), [docs/ACID_EXPLAINED.md](docs/ACID_EXPLAINED.md) (ACID properties), [docs/REDIS_GUIDE.md](docs/REDIS_GUIDE.md) (why and when to use Redis).
 
 **If something is unclear:** The code has short comments (e.g. in `cmd/api.go` for middleware, `cmd/main.go` for startup). Use the links above for request flow, migrations, and running the project.
+
+For a **summary of improvements** (connection pool, repository interfaces, tests, CI, etc.), see **[IMPROVEMENTS.md](IMPROVEMENTS.md)**.
+
+**API docs:** We maintain **[docs/API_REFERENCE.md](docs/API_REFERENCE.md)** (all curl + responses) and **[docs/openapi.yaml](docs/openapi.yaml)** (OpenAPI 3 spec for Swagger/code gen). See [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md) for how to view the spec.
+
+**Scalability and testability (what the codebase does):** The API uses a **connection pool** (`pgxpool`) so many requests can use the DB at once; **repository interfaces** in `internal/products` and `internal/orders` so services can be tested with mock repos; **versioned routes** (`/v1/products`, `/v1/orders`) so you can add v2 later; **pagination** on list products (`?limit=&offset=`); **graceful shutdown** (Ctrl+C lets in-flight requests finish); **health with DB ping** (`/health/live`) for load balancers; and **rate limiting** per IP (configurable via `RATE_LIMIT_REQUESTS_PER_MINUTE`, default 100/min). Comments in the code explain each layer.
 
 ---
 
@@ -77,7 +94,13 @@ Here is the important folder/file map and **what you should read** as a beginner
   - Tiny helper to read **environment variables with a fallback**.
 
 - `internal/json/json.go`  
-  - Helpers to **read JSON from requests** and **write JSON responses**.
+  - Helpers to **read JSON from requests** and **write JSON responses**. Includes `WriteError` for consistent error format with `request_id`.
+
+- `internal/validate/validate.go`  
+  - Input validation (email format, password length, quantity > 0, etc.). Used by handlers before calling services.
+
+- `internal/auth/`  
+  - `handlers.go`: Register and Login; `service.go`: bcrypt + DB; `middleware.go`: JWT; `context.go`: customer ID in context; `jwt.go`: sign/verify; `repository.go`: interface; `adapter.go`: wraps sqlc.
 
 - `internal/products/`  
   - `service.go`: business logic for products (currently just listing products).
@@ -91,6 +114,10 @@ Here is the important folder/file map and **what you should read** as a beginner
     - Creates an order.
     - For each item, checks product stock and creates order items.
   - `handlers.go`: HTTP handler that reads JSON, calls the service, and returns JSON or errors.
+  - `repository.go`: OrderRepo and OrderTxRepo interfaces; adapter wraps sqlc.
+
+- `internal/metrics/metrics.go`  
+  - Prometheus metrics (request count, duration). Exposed at `/metrics`.
 
 - `internal/adapters/postgresql/`  
   - `migrations/` – **SQL migration files** that create the `products`, `orders`, and `order_items` tables.
@@ -99,13 +126,14 @@ Here is the important folder/file map and **what you should read** as a beginner
     - `queries.sql.go` – Go functions generated from `.sql` queries (e.g. `ListProducts`, `FindProductByID`, etc.).
     - `db.go`, `querier.go` – helpers and interfaces so the rest of the code can call repo methods.
 
-As a learner, a good reading order is:
+As a learner, a good reading order is (see [docs/LEARNER_GUIDE.md](docs/LEARNER_GUIDE.md) for more detail):
 
-1. `cmd/main.go`
-2. `cmd/api.go`
+1. `cmd/main.go` — entry point, config, graceful shutdown
+2. `cmd/api.go` — router, middleware, route wiring
 3. `internal/products/service.go` and `internal/products/handlers.go`
 4. `internal/orders/types.go`, `internal/orders/service.go`, `internal/orders/handlers.go`
-5. `internal/adapters/postgresql/sqlc/*`
+5. `internal/auth/middleware.go`, `internal/auth/context.go` — JWT and context
+6. `internal/adapters/postgresql/sqlc/*` — generated code (read-only)
 
 ---
 
@@ -127,6 +155,29 @@ In simple words:
    - The handler calls a **service** (business logic).
    - The service uses the **repository (`sqlc`)** to talk to PostgreSQL.
    - The handler writes the response as JSON.
+
+---
+
+### Command reference (what each command does)
+
+| Command | Purpose |
+|---------|---------|
+| `go run ./cmd` | Build and run the API. Reads `.env`, listens on `:8080`. Stop with Ctrl+C. |
+| `CGO_ENABLED=0 go run -buildvcs=false ./cmd` | Same, but avoids Xcode/VCS errors on macOS. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#7-xcode-license-or-vcs-error-macos). |
+| `go test -v ./...` | Run all tests (unit + integration). Skips integration tests if DB is unavailable. |
+| `go test -v ./cmd/ -run Integration` | Run only integration tests (register, login, products, orders). |
+| `go build ./...` | Build all packages (no output binary; use to verify code compiles). |
+| `go build -o api ./cmd/` | Build the API binary as `./api` (for deployment). |
+| `sqlc generate` | Regenerate Go code from SQL queries. Run after changing `queries.sql` or schema. |
+| `source .env; goose up` | Apply all pending migrations (requires `GOOSE_DBSTRING`, `GOOSE_MIGRATION_DIR` in `.env`). |
+| `source .env; goose down` | Roll back the last migration. |
+| `docker compose up -d` | Start PostgreSQL in the background. Run this before the API. |
+| `docker compose down` | Stop PostgreSQL. Data in the volume is kept. |
+| `docker compose down -v` | Stop PostgreSQL and delete all data (fresh DB next time). |
+| `./scripts/setup-and-run.sh` | One-shot: start DB, run migrations, seed products, start API. |
+| `./scripts/verify-api.sh` | Verify all 7 endpoints (API must be running). |
+
+**Note:** Use `go run ./cmd` (not `go run cmd/*.go`) to avoid running the integration test file. Use `go test` (not `go run`) for `*_test.go` files.
 
 ---
 
@@ -197,13 +248,15 @@ All credentials and config (database URL, HTTP port) are read from a single **`.
 
 3. **Do not commit `.env`** (it’s in `.gitignore`). Commit `.env.example` as a template; everyone copies it to `.env` and fills in their own values.
 
-**One database for the project** — The app uses a single database: Postgres running in Docker. There is only one DB; the API, migrations (Goose), and any DB client (e.g. TablePlus) all connect to it. If you have another Postgres on your machine (e.g. on port 5432), that is separate; this project uses only the Docker one on port 15432.
+**One database for the project** — The app uses a single database: Postgres running in Docker. Port **15432** avoids conflict with Mac Postgres on 5432. To use Mac Postgres on 15432 instead, see [docs/MAC_POSTGRES_15432.md](docs/MAC_POSTGRES_15432.md).
 
 **Standard Docker Postgres connection** (app, Goose, and any DB client use these):
 
 | Host     | Port   | Database | User     | Password | SSL  |
 |----------|--------|----------|----------|----------|------|
 | localhost | 15432 | ecom     | postgres | postgres | off  |
+
+**Why `15432:5432` in docker-compose?** The mapping is `HOST_PORT:CONTAINER_PORT`. Inside the container, Postgres always listens on **5432** (default in the official image). On your Mac, we use **15432** to avoid conflict with Mac Postgres (Postgres.app, Homebrew) which often uses 5432. So you connect to `localhost:15432`; Docker forwards that to the container's 5432.
 
 ---
 
@@ -213,10 +266,10 @@ All credentials and config (database URL, HTTP port) are read from a single **`.
 |------|------------|--------------------------------------|
 | **1. Clone** | `git clone <repo-url>` then `cd ecom-go-api-project` | You need the code on your machine. `cd` into the project root for all following commands. |
 | **2. Create .env** | `cp .env.example .env` (edit if needed) | All credentials live in `.env`; the app and scripts read from it. |
-| **3. Start DB** | `docker compose up -d` | Starts PostgreSQL in a container. The app connects using the DSN from `.env` (default port 15432). |
+| **3. Start DB** | `docker compose up -d` | Starts PostgreSQL in a container. The app connects using the DSN from `.env` (port 15432). |
 | **4. Migrate** | Either run `./scripts/setup-and-run.sh` (sources `.env` and runs migrations + app) or `source .env; goose up` | Creates tables from `migrations/`. Script uses `.env` so no need to export vars by hand. |
 | **5. Generate SQLC (if needed)** | `sqlc generate` | Only needed after you change `.sql` queries or schema. Generates Go code in `internal/adapters/postgresql/sqlc/`. |
-| **6. Start API** | `go run cmd/*.go` | Runs the app (reads `.env`); server listens on `http://localhost:8080`. Stop with Ctrl+C. |
+| **6. Start API** | `go run ./cmd` | Runs the app (reads `.env`); server listens on `http://localhost:8080`. Stop with Ctrl+C. |
 
 **Commands to run (in order):**
 
@@ -234,7 +287,7 @@ docker compose up -d
 
 # 4. Run migrations and start API (script sources .env automatically)
 ./scripts/setup-and-run.sh
-# Or manually: source .env; goose up; go run cmd/*.go
+# Or manually: source .env && goose up && go run ./cmd
 
 # 5. Regenerate SQLC only if you changed queries/schema
 sqlc generate
@@ -254,12 +307,12 @@ The API is now available at **`http://localhost:8080`**. Keep this terminal open
 
 | What to stop | Command | Comment |
 |--------------|---------|---------|
-| **API** | Press **Ctrl+C** in the terminal where `go run cmd/*.go` is running | Stops the Go server only. The database keeps running. |
+| **API** | Press **Ctrl+C** in the terminal where `go run ./cmd` is running | Stops the Go server only. The database keeps running. |
 | **Database (Docker)** | `docker compose down` | Stops and removes the Postgres container. Your data stays in the Docker volume (safe for next `docker compose up -d`). |
 | **Database and delete all data** | `docker compose down -v` | Stops the container and **removes the volume** — next time you start, you get an empty DB (run migrations again). |
 | **Check if DB is running** | `docker ps` | You should see `ecom-postgres` when the DB is up. |
 
-So: use **Ctrl+C** to stop the API; use **`docker compose down`** when you want to stop the DB (e.g. at end of day). Start again with `docker compose up -d` then `go run cmd/*.go`.
+So: use **Ctrl+C** to stop the API; use **`docker compose down`** when you want to stop the DB (e.g. at end of day). Start again with `docker compose up -d` then `go run ./cmd`.
 
 ---
 
@@ -270,23 +323,26 @@ Use [Postman](https://www.postman.com/downloads/) to send requests and inspect r
 | Step | What to do in Postman | Understand & do for future learning |
 |------|------------------------|--------------------------------------|
 | **1. Open Postman** | Install Postman (if needed), open it, and create a new request (e.g. New → HTTP Request). | Postman lets you set method, URL, headers, and body without writing code. Same ideas apply to any HTTP client (curl, browser, frontend). |
-| **2. Test health** | Set **Method** to `GET`, **URL** to `http://localhost:8080/health`. Click **Send**. | You should get status `200` and body `all good`. This confirms the server is running and the route works. |
-| **3. Test list products** | Set **Method** to `GET`, **URL** to `http://localhost:8080/products`. Click **Send**. | You get JSON: an array of products (or `[]` if the table is empty). In code, this is handled by `products.ListProducts` and the repo’s `ListProducts` query. |
-| **4. Test place order** | Set **Method** to `POST`, **URL** to `http://localhost:8080/orders`. In **Headers** add `Content-Type: application/json`. In **Body** choose **raw** and **JSON**, then paste the JSON below. Click **Send**. | You get `201 Created` and the created order JSON, or `404`/`500` on error. In code, the handler reads JSON with `json.Read`, then calls `orders.PlaceOrder` (which uses a DB transaction). |
+| **2. Test health** | Set **Method** to `GET`, **URL** to `http://localhost:8080/health`. Click **Send**. | You should get status `200` and body `all good`. Use `GET /health/live` to also ping the DB (503 if DB is down). |
+| **3. Register & login** | See **[AUTH_README.md](AUTH_README.md)** for full steps. Summary: `POST /v1/auth/register` with `{ email, password, name }`, then `POST /v1/auth/login` to get a token. | Copy the `token` from the login response. |
+| **4. Test list products** | Set **Method** to `GET`, **URL** to `http://localhost:8080/v1/products`. In **Headers** add `Authorization: Bearer <your-token>`. Click **Send**. | You get JSON: an array of products. Without token you get `401`. |
+| **5. Test place order** | Set **Method** to `POST`, **URL** to `http://localhost:8080/v1/orders`. **Headers:** `Authorization: Bearer <token>`, `Content-Type: application/json`. **Body (raw, JSON):** `{ "items": [{ "productId": 1, "quantity": 2 }] }`. Click **Send**. | You get `201 Created`. Customer ID comes from the token (not from body). |
 
 **Postman setup per request:**
 
 | Endpoint | Method | URL | Headers | Body |
 |----------|--------|-----|---------|------|
 | Health check | `GET` | `http://localhost:8080/health` | (none) | (none) |
-| List products | `GET` | `http://localhost:8080/products` | (none) | (none) |
-| Place order | `POST` | `http://localhost:8080/orders` | `Content-Type: application/json` | See JSON below |
+| Health (with DB) | `GET` | `http://localhost:8080/health/live` | (none) | (none) |
+| Register | `POST` | `http://localhost:8080/v1/auth/register` | `Content-Type: application/json` | `{ "email", "password", "name" }` |
+| Login | `POST` | `http://localhost:8080/v1/auth/login` | `Content-Type: application/json` | `{ "email", "password" }` |
+| List products | `GET` | `http://localhost:8080/v1/products` | `Authorization: Bearer <token>` | Optional: `?limit=20&offset=0` |
+| Place order | `POST` | `http://localhost:8080/v1/orders` | `Authorization: Bearer <token>`, `Content-Type: application/json` | `{ "items": [{ "productId", "quantity" }] }` |
 
-**Body for Place order (raw JSON):**
+**Body for Place order (raw JSON):** Customer ID comes from the JWT — do **not** send `customerId` in the body.
 
 ```json
 {
-  "customerId": 1,
   "items": [
     { "productId": 1, "quantity": 2 },
     { "productId": 2, "quantity": 1 }
@@ -294,7 +350,7 @@ Use [Postman](https://www.postman.com/downloads/) to send requests and inspect r
 }
 ```
 
-Use real `productId` values that exist in your `products` table (e.g. from the **List products** response). If you have no products yet, add rows via SQL or a seed script, or create a migration that inserts sample data.
+Use real `productId` values from the **List products** response. Get a token first via **Login** (see [AUTH_README.md](AUTH_README.md)).
 
 **What to check in Postman:**
 
@@ -316,6 +372,7 @@ Quick check that the server is alive.
 
 ```bash
 curl http://localhost:8080/health
+# With DB check: curl http://localhost:8080/health/live
 ```
 
 Response (plain text):
@@ -324,12 +381,30 @@ Response (plain text):
 all good
 ```
 
-#### `GET /products`
+#### `POST /v1/auth/register` and `POST /v1/auth/login`
 
-Returns all products from the `products` table as JSON.
+Register creates a customer; login returns a JWT. See **[AUTH_README.md](AUTH_README.md)** for full details.
 
 ```bash
-curl http://localhost:8080/products
+# Register
+curl -X POST http://localhost:8080/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"secret123","name":"Your Name"}'
+
+# Login (save the token from response)
+curl -X POST http://localhost:8080/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"secret123"}'
+```
+
+#### `GET /products`
+
+Returns all products from the `products` table as JSON. **Requires JWT.**
+
+```bash
+# First login to get TOKEN, then:
+curl "http://localhost:8080/v1/products?limit=20&offset=0" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 Example response:
@@ -350,15 +425,16 @@ This handler lives in `internal/products/handlers.go` and calls the service in `
 
 #### `POST /orders`
 
-Creates a new order for the given customer and list of items.
+Creates a new order. **Customer ID comes from the JWT** (not from the body). Body has only `items`.
 
 Request:
 
 ```bash
-curl -X POST http://localhost:8080/orders \
+# TOKEN from login response
+curl -X POST http://localhost:8080/v1/orders \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "customerId": 123,
     "items": [
       { "productId": 1, "quantity": 2 },
       { "productId": 2, "quantity": 1 }
@@ -371,7 +447,7 @@ If all products exist and have enough stock, you get back the created order:
 ```json
 {
   "id": 10,
-  "customer_id": 123,
+  "customer_id": 1,
   "created_at": "2024-01-01T00:00:00Z"
 }
 ```
@@ -411,7 +487,7 @@ Let’s walk through what happens for `GET /products`:
    - Creates the handler:
      - `productHandler := products.NewHandler(productService)`
    - Registers the route:
-     - `r.Get("/products", productHandler.ListProducts)`
+     - `r.Get("/v1/products", productHandler.ListProducts)`
 
 3. **`products/handlers.go` – `ListProducts` handler**:
    - Calls the service:
